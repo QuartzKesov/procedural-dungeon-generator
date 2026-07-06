@@ -28,20 +28,20 @@ export interface BuildOptions {
 
 // ---- Theme palettes for presentation -------------------------------------
 const THEME_FLOOR: Record<string, [number, number, number]> = {
-  crypt:    [0.62, 0.58, 0.53],
-  cavern:   [0.58, 0.46, 0.36],
-  catacomb: [0.72, 0.66, 0.58],
-  forge:    [0.56, 0.42, 0.34],
-  ice:      [0.60, 0.68, 0.74],
-  jungle:   [0.42, 0.50, 0.36],
+  crypt:    [0.72, 0.68, 0.62],
+  cavern:   [0.68, 0.54, 0.42],
+  catacomb: [0.82, 0.76, 0.68],
+  forge:    [0.66, 0.50, 0.40],
+  ice:      [0.70, 0.78, 0.84],
+  jungle:   [0.52, 0.60, 0.44],
 };
 const THEME_WALL: Record<string, [number, number, number]> = {
-  crypt:    [0.48, 0.45, 0.50],
-  cavern:   [0.42, 0.32, 0.26],
-  catacomb: [0.60, 0.54, 0.48],
-  forge:    [0.40, 0.30, 0.26],
-  ice:      [0.50, 0.58, 0.66],
-  jungle:   [0.30, 0.36, 0.24],
+  crypt:    [0.58, 0.54, 0.60],
+  cavern:   [0.52, 0.40, 0.32],
+  catacomb: [0.70, 0.64, 0.58],
+  forge:    [0.50, 0.38, 0.32],
+  ice:      [0.60, 0.68, 0.76],
+  jungle:   [0.40, 0.44, 0.30],
 };
 
 // deterministic per-cell value noise (0..1)
@@ -389,11 +389,11 @@ export function buildDungeonScene(d: Dungeon, opts: BuildOptions): DungeonScene 
       if (!isCorr) {
         const rid = owner[i] - 1;
         if (rid >= 0) {
-          // blend 18% toward room tint
+          // blend 35% toward room tint (was 18% — increased for better visual distinction)
           const t = d.rooms[rid].tint;
-          r = r * 0.82 + t[0] * 0.18;
-          g = g * 0.82 + t[1] * 0.18;
-          b = b * 0.82 + t[2] * 0.18;
+          r = r * 0.65 + t[0] * 0.35;
+          g = g * 0.65 + t[1] * 0.35;
+          b = b * 0.65 + t[2] * 0.35;
         }
       } else {
         // corridors darker and untinted
@@ -775,9 +775,10 @@ export function buildDungeonScene(d: Dungeon, opts: BuildOptions): DungeonScene 
   const flickerLights: { light: THREE.PointLight; base: number; phase: number; kind: 'torch' | 'brazier' | 'portal' | 'boss' | 'shrine' }[] = [];
 
   // hemisphere (cool sky, warm ground bounce) + directional for form
-  const hemi = new THREE.HemisphereLight(0x7080a0, 0x4a3624, 1.3);
+  // Brightened for better visibility at overview zoom
+  const hemi = new THREE.HemisphereLight(0x90a0c0, 0x6a5a44, 2.0);
   group.add(hemi);
-  const dir = new THREE.DirectionalLight(0xc4cce0, 0.75);
+  const dir = new THREE.DirectionalLight(0xd4dce8, 1.2);
   dir.position.set(0.5, 1, 0.3);
   group.add(dir);
 
@@ -1401,23 +1402,20 @@ export function makeIsoCamera(d: Dungeon, aspect: number): THREE.OrthographicCam
     Math.sin(pitch),
     Math.cos(pitch) * Math.sin(yaw),
   );
-  // fit the dungeon: the isometric projection of a W×H grid spans roughly
-  // (W+H)/√2 horizontally and (W+H)/√2·sin(pitch) vertically. Use a half-
-  // frustum that comfortably contains the diagonal.
+  // fit the dungeon: zoom in slightly closer by default for better visibility
   const W = d.W, H = d.H;
-  const half = (W + H) * 0.42;
+  const half = (W + H) * 0.38; // was 0.42 — tighter default zoom
   const cam = new THREE.OrthographicCamera(-half * aspect, half * aspect, half, -half, 0.1, 4000);
   const center = new THREE.Vector3(0, 0, 0);
-  // For ortho the distance only affects fog + clipping; keep it modest so fog
-  // isn't overly aggressive.
-  const dist = Math.max(W, H) * 0.9 + 30;
+  // Closer camera = less fog interference
+  const dist = Math.max(W, H) * 0.7 + 20; // was 0.9 + 30 — closer
   cam.position.copy(center).addScaledVector(dir, dist);
   cam.lookAt(center);
   cam.up.set(0, 1, 0);
   return cam;
 }
 
-/** Fog density tuned to dungeon scale: far edge ~32% fogged. */
+/** Fog density tuned to dungeon scale: reduced for better visibility. */
 export function fogDensityFor(d: Dungeon): number {
-  return Math.max(0.0010, Math.min(0.014, 0.40 / Math.max(d.W, d.H)));
+  return Math.max(0.0005, Math.min(0.008, 0.25 / Math.max(d.W, d.H)));
 }

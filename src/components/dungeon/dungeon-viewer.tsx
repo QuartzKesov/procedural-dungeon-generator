@@ -132,8 +132,8 @@ export function DungeonViewer() {
     const targetFog = dayMode
       ? Math.max(0.0005, fogDensityFor(dungeon) * 0.3)
       : fogDensityFor(dungeon);
-    const targetHemi = dayMode ? 1.8 : 1.3;
-    const targetDir = dayMode ? 1.2 : 0.75;
+    const targetHemi = dayMode ? 2.8 : 2.0;
+    const targetDir = dayMode ? 1.8 : 1.2;
     // capture current values as the "from"
     const fromFog = (state.scene.fog instanceof THREE.FogExp2) ? state.scene.fog.density : targetFog;
     let fromHemi = targetHemi, fromDir = targetDir;
@@ -288,11 +288,11 @@ export function DungeonViewer() {
     const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: false, preserveDrawingBuffer: true });
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
     renderer.setSize(container.clientWidth, container.clientHeight);
-    renderer.setClearColor(0x05040a, 1);
+    renderer.setClearColor(0x0a0a10, 1);
     container.appendChild(renderer.domElement);
 
     const scene = new THREE.Scene();
-    scene.fog = new THREE.FogExp2(0x05040a, fogDensityFor(dungeon));
+    scene.fog = new THREE.FogExp2(0x0a0a10, fogDensityFor(dungeon));
 
     const camera = makeIsoCamera(dungeon, container.clientWidth / container.clientHeight);
 
@@ -1049,7 +1049,7 @@ export function DungeonViewer() {
                     <SliderRow label="Этажей" value={params.levelCount} min={1} max={5} step={1}
                       display={`${params.levelCount}`} onChange={(v) => setParams((p) => ({ ...p, levelCount: v, currentLevel: 0 }))} />
                     <div className="flex items-center gap-2">
-                      <span className="text-[10px] text-amber-300/50">Floor {params.currentLevel + 1}/{params.levelCount}</span>
+                      <span className="text-[10px] text-amber-300/50">Этаж {params.currentLevel + 1}/{params.levelCount}</span>
                       <div className="flex gap-1">
                         <Button size="sm" variant="outline" disabled={params.currentLevel === 0}
                           onClick={() => setParams((p) => ({ ...p, currentLevel: Math.max(0, p.currentLevel - 1), seed: p.seed }))}
@@ -1385,13 +1385,13 @@ export function DungeonViewer() {
                   <div className="space-y-2 rounded-lg border border-amber-900/30 bg-black/40 p-2">
                     {/* filter buttons */}
                     <div className="flex flex-wrap gap-1">
-                      {['all', 'entrance', 'boss', 'treasure', 'shrine', 'элита', 'combat'].map((t) => (
+                      {[{v:'all',l:'все'},{v:'entrance',l:'вход'},{v:'boss',l:'босс'},{v:'treasure',l:'сокровище'},{v:'shrine',l:'святилище'},{v:'elite',l:'элита'},{v:'combat',l:'бой'}].map((t) => (
                         <button
-                          key={t}
-                          onClick={() => setRoomListFilter(t)}
-                          className={`rounded px-1.5 py-0.5 text-[9px] capitalize transition-colors ${roomListFilter === t ? 'bg-amber-800/50 text-amber-100' : 'bg-amber-950/30 text-amber-300/50 hover:bg-amber-900/30'}`}
+                          key={t.v}
+                          onClick={() => setRoomListFilter(t.v)}
+                          className={`rounded px-1.5 py-0.5 text-[9px] transition-colors ${roomListFilter === t.v ? 'bg-amber-800/50 text-amber-100' : 'bg-amber-950/30 text-amber-300/50 hover:bg-amber-900/30'}`}
                         >
-                          {t}
+                          {t.l}
                         </button>
                       ))}
                     </div>
@@ -1414,10 +1414,12 @@ export function DungeonViewer() {
                               className={`flex w-full items-center gap-2 rounded border px-2 py-1 text-left transition-colors ${selectedRoom === r.id ? 'border-amber-500/50 bg-amber-900/30' : 'border-amber-900/20 bg-amber-950/10 hover:bg-amber-900/20'}`}
                             >
                               <span className="inline-block h-2 w-2 shrink-0 rounded-full" style={{ background: color }} />
-                              <span className="w-14 shrink-0 text-[10px] capitalize text-amber-100/70">{r.type}</span>
+                              <span className="w-14 shrink-0 text-[10px] text-amber-100/70">{
+                                {entrance:'вход',boss:'босс',treasure:'сокровище',shrine:'святилище',elite:'элита',combat:'бой'}[r.type] || r.type
+                              }</span>
                               <span className="shrink-0 font-mono text-[9px] text-amber-300/40">#{r.id}</span>
                               <span className="ml-auto flex items-center gap-1.5">
-                                <span className="font-mono text-[9px] text-amber-200/40">d{r.depth}</span>
+                                <span className="font-mono text-[9px] text-amber-200/40">г{r.depth}</span>
                                 <span className="font-mono text-[9px]" style={{ color }}>{(r.difficulty * 100).toFixed(0)}%</span>
                               </span>
                             </button>
@@ -1647,7 +1649,7 @@ function CompareOverlay({ dungeonA, seedB, params, onClose, onSeedBChange }: {
             <CompareStat k="Стены" a={dungeonA.stats.wallTiles} b={dungeonB.stats.wallTiles} />
             <CompareStat k="Объекты" a={dungeonA.stats.props} b={dungeonB.stats.props} />
             <CompareStat k="Враги" a={dungeonA.stats.spawns} b={dungeonB.stats.spawns} />
-            <CompareStat k="Events" a={dungeonA.stats.events} b={dungeonB.stats.events} />
+            <CompareStat k="Событ." a={dungeonA.stats.events} b={dungeonB.stats.events} />
             <CompareStat k="Макс. глубина" a={dungeonA.stats.maxDepth} b={dungeonB.stats.maxDepth} />
             <CompareStat k="Критич." a={`${dungeonA.stats.criticalLength}h`} b={`${dungeonB.stats.criticalLength}h`} />
             <CompareStat k="Ген." a={`${dungeonA.stats.genMs.toFixed(1)}ms`} b={`${dungeonB.stats.genMs.toFixed(1)}ms`} />
@@ -1915,7 +1917,7 @@ function RoomInspector({ room, dungeon, onClose, onFocus }: {
           <div className="flex items-center gap-2">
             <span className="inline-block h-3 w-3 rounded-full ring-2 ring-white/20" style={{ background: typeColor }} />
             <div>
-              <div className="font-serif text-sm capitalize text-amber-100">{room.type} Room #{room.id}</div>
+              <div className="font-serif text-sm capitalize text-amber-100">{({entrance:'Вход',boss:'Босс',treasure:'Сокровище',shrine:'Святилище',elite:'Элита',combat:'Бой'})[room.type] || room.type} №{room.id}</div>
               <div className="font-mono text-[10px] text-amber-300/50">{room.shape} · {room.cells} cells · deg {room.degree}</div>
             </div>
           </div>
@@ -1948,7 +1950,7 @@ function RoomInspector({ room, dungeon, onClose, onFocus }: {
                   color: ['#88ff88', '#ffcc44', '#ff5544', '#ff2222'][Number(tier)] ?? '#888',
                   background: (['#88ff88', '#ffcc44', '#ff5544', '#ff2222'][Number(tier)] ?? '#888') + '11',
                 }}>
-                  {['мусор', 'обычный', 'элита', 'boss'][Number(tier)]} ×{n}
+                  {['мусор','обычный','элита','босс'][Number(tier)]} ×{n}
                 </span>
               ))}
           </div>
