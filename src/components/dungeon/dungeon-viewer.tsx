@@ -25,7 +25,7 @@ import {
   ArrowDown, ArrowUp, CloudRain, Snowflake, Flame, FileJson, Columns2, Images,
 } from 'lucide-react';
 import { downloadExport } from '@/lib/dungeon/export';
-import { downloadUVTT, downloadTopDownPNG } from '@/lib/dungeon/uvtt';
+import { downloadUVTT, downloadTopDownPNG, downloadTopDownPNGClean } from '@/lib/dungeon/uvtt';
 import type { WeatherType } from '@/lib/dungeon/types';
 import {
   createEditorState, cloneDungeonForEdit, editGrid, stampRoom, addProp,
@@ -1112,20 +1112,27 @@ export function DungeonViewer() {
               {/* ---- Foundry VTT export ---- */}
               <div className="rounded-lg border border-emerald-900/30 bg-emerald-950/10 p-2">
                 <div className="mb-1.5 text-[9px] uppercase tracking-wider text-emerald-400/50">Foundry VTT</div>
-                <div className="grid grid-cols-2 gap-1.5">
+                <div className="grid grid-cols-1 gap-1.5">
                   <Button size="sm" variant="outline" onClick={() => downloadUVTT(activeDungeon)}
                     className="border-emerald-800/40 bg-emerald-950/20 text-xs text-emerald-300 hover:bg-emerald-900/30"
                     title="Экспорт .dd2vtt для dd-import (карта + стены + двери + свет)">
-                    <Download className="mr-1 h-3.5 w-3.5" /> .dd2vtt
+                    <Download className="mr-1 h-3.5 w-3.5" /> .dd2vtt (карта + стены + двери + свет)
                   </Button>
-                  <Button size="sm" variant="outline" onClick={() => downloadTopDownPNG(activeDungeon)}
-                    className="border-emerald-800/40 bg-emerald-950/20 text-xs text-emerald-300 hover:bg-emerald-900/30"
-                    title="Только top-down PNG карта">
-                    <Download className="mr-1 h-3.5 w-3.5" /> PNG
-                  </Button>
+                  <div className="grid grid-cols-2 gap-1.5">
+                    <Button size="sm" variant="outline" onClick={() => downloadTopDownPNGClean(activeDungeon)}
+                      className="border-emerald-800/40 bg-emerald-950/20 text-xs text-emerald-300 hover:bg-emerald-900/30"
+                      title="Top-down PNG без меток, с декором (для Foundry)">
+                      <Download className="mr-1 h-3 w-3" /> PNG чистый
+                    </Button>
+                    <Button size="sm" variant="outline" onClick={() => downloadTopDownPNG(activeDungeon)}
+                      className="border-emerald-800/40 bg-emerald-950/20 text-xs text-emerald-300 hover:bg-emerald-900/30"
+                      title="Top-down PNG с метками комнат">
+                      <Download className="mr-1 h-3 w-3" /> PNG метки
+                    </Button>
+                  </div>
                 </div>
                 <p className="mt-1.5 text-[8px] leading-relaxed text-emerald-400/30">
-                  .dd2vtt — для импорта в Foundry VTT через модуль dd-import. Содержит карту, стены (line of sight), двери и источники света.
+                  .dd2vtt — импорт в Foundry через dd-import. PNG чистый — для ручного импорта (без меток, с декором).
                 </p>
               </div>
 
