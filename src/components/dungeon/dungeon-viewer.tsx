@@ -25,6 +25,7 @@ import {
   ArrowDown, ArrowUp, CloudRain, Snowflake, Flame, FileJson, Columns2, Images,
 } from 'lucide-react';
 import { downloadExport } from '@/lib/dungeon/export';
+import { downloadUVTT, downloadTopDownPNG } from '@/lib/dungeon/uvtt';
 import type { WeatherType } from '@/lib/dungeon/types';
 import {
   createEditorState, cloneDungeonForEdit, editGrid, stampRoom, addProp,
@@ -1104,12 +1105,33 @@ export function DungeonViewer() {
                 </Button>
                 <Button size="sm" variant="outline" onClick={() => { setCompareSeed(params.seed); setShowCompare(true); }}
                   className="border-amber-800/40 bg-amber-950/20 text-xs text-amber-300 hover:bg-amber-900/30" title="Сравнить два сида">
-                  <Columns2 className="mr-1 h-3.5 w-3.5" /> Compare
+                  <Columns2 className="mr-1 h-3.5 w-3.5" /> Сравнить
                 </Button>
               </div>
+
+              {/* ---- Foundry VTT export ---- */}
+              <div className="rounded-lg border border-emerald-900/30 bg-emerald-950/10 p-2">
+                <div className="mb-1.5 text-[9px] uppercase tracking-wider text-emerald-400/50">Foundry VTT</div>
+                <div className="grid grid-cols-2 gap-1.5">
+                  <Button size="sm" variant="outline" onClick={() => downloadUVTT(activeDungeon)}
+                    className="border-emerald-800/40 bg-emerald-950/20 text-xs text-emerald-300 hover:bg-emerald-900/30"
+                    title="Экспорт .dd2vtt для dd-import (карта + стены + двери + свет)">
+                    <Download className="mr-1 h-3.5 w-3.5" /> .dd2vtt
+                  </Button>
+                  <Button size="sm" variant="outline" onClick={() => downloadTopDownPNG(activeDungeon)}
+                    className="border-emerald-800/40 bg-emerald-950/20 text-xs text-emerald-300 hover:bg-emerald-900/30"
+                    title="Только top-down PNG карта">
+                    <Download className="mr-1 h-3.5 w-3.5" /> PNG
+                  </Button>
+                </div>
+                <p className="mt-1.5 text-[8px] leading-relaxed text-emerald-400/30">
+                  .dd2vtt — для импорта в Foundry VTT через модуль dd-import. Содержит карту, стены (line of sight), двери и источники света.
+                </p>
+              </div>
+
               <Button size="sm" variant="outline" onClick={() => setShowGallery(true)}
                 className="w-full border-amber-800/40 bg-amber-950/20 text-xs text-amber-300 hover:bg-amber-900/30">
-                <Images className="mr-1.5 h-3.5 w-3.5" /> Gallery
+                <Images className="mr-1.5 h-3.5 w-3.5" /> Галерея
               </Button>
 
               {/* Presets: save / load / delete */}
