@@ -1,0 +1,91 @@
+# Project Worklog — Procedural Dungeon Generator (Isometric Three.js ARPG)
+
+## Project Overview
+Building a deterministic procedural dungeon generator + Three.js isometric ARPG scene renderer,
+delivered as a Next.js 16 page at `/`. Pure-data generator (no THREE imports) + presentation scene
+builder (InstancedMesh, baked AO, point-light budget, FogExp2) + control panel + staged build
+animation + acceptance tests.
+
+## Stack
+- Next.js 16 (App Router), TypeScript 5, Tailwind CSS 4, shadcn/ui
+- Three.js 0.185 (just installed: `three` + `@types/three`)
+- No database needed for this feature (pure client-side generation + rendering)
+
+---
+Task ID: 0
+Agent: main
+Task: Set up project structure, install Three.js, start dev server, create worklog
+
+Work Log:
+- Explored project structure (Next.js 16 + shadcn/ui already scaffolded)
+- Installed `three@0.185.1` and `@types/three@0.185.0`
+- Started dev server on port 3000 (Ready in 1075ms)
+- Created this worklog
+- Planned module layout under `src/lib/dungeon/`:
+  - `rng.ts` — mulberry32 + helpers
+  - `types.ts` — data contract
+  - `geometry.ts` — Delaunay (Bowyer-Watson), MST (Prim), BFS
+  - `generator.ts` — generateDungeon pipeline (scatter→separate→graph→semantics→carve→rasterize→decorate→metadata)
+  - `tests.ts` — acceptance tests (auto-run, print results)
+  - `scene.ts` — buildDungeonScene (Three.js presentation, InstancedMesh, lighting, fog, overlays)
+  - `names.ts` — seeded dungeon name generator
+- UI: `src/app/page.tsx` (control panel + canvas + stats + legend + staged animation)
+
+Stage Summary:
+- Dev server running cleanly on port 3000
+- Three.js installed
+- Architecture decided: strict separation between pure-data generator and THREE presentation layer
+- Next: build RNG → types → generator stages → tests → scene → UI
+
+---
+Task ID: 1-11
+Agent: main
+Task: Build the complete pure-data dungeon generator + acceptance tests
+
+Work Log:
+- rng.ts: mulberry32 + float/range/int/chance/pick/weighted/gaussian(Box-Muller)/fork(tag) + FNV-1a hashString
+- types.ts: full data contract (Params, Dungeon, Room, Edge, Prop, Spawn, Stats, VOID/FLOOR/WALL) + idx/inBounds helpers
+- geometry.ts: Bowyer-Watson Delaunay (orientation-aware inCircle predicate), Prim MST (O(n^2), deterministic tie-break), BFS, grid flood-fill
+- names.ts: syllable-table name generator ("The Ashen Vaults of Vor'gul")
+- generator.ts: full pipeline — scatter (ellipse, archetype+shape tables, force ≥2 large) → separate (AABB push-apart, 2-cell padding, 300-iter cap, snap, cull) → graph (Delaunay→MST→loop re-add with 2.2×meanMst gate, mandatory ≥1 loop) → semantics (boss=largest, entrance=farthest leaf from boss, critical path, treasure cap 4, 1-2 shrines mid-depth off-path, 1-2 elites at 55-85% depth, difficulty=0.15+0.85*depth/maxDepth) → carve (L-corridors, seeded elbow, width 3 critical/2 default/1 treasure-spur, straight-run skip) → rasterize (walls=8-neighbor, doorways, grid BFS field) → decorate (pillars/torches/debris/braziers/chests/crystal/portal/spawns + farthest-point-sampled light subset) → metadata (seeded name, per-room theme tint, FNV-1a grid checksum, genMs)
+- tests.ts: 6 acceptance tests (reachability, determinism, depth/entrance, leaves/loops, placement, perf) with console pretty-print
+- Fixed 3 bugs during smoke-testing: (a) roomFloorCells used rx/ry but Room has w/h; (b) inCircle predicate wasn't orientation-aware → 0 Delaunay edges; (c) brazier ring included corridor doorway cells
+- Re-roll safety net: on connectivity failure, derive a new seed (max 5 attempts) — never triggered in practice
+
+Stage Summary:
+- ALL 6 acceptance tests pass for seeds {1,7,42,555,1337,2024,99999,123456} and room counts {10,42,60}
+- 60-room generation ~25ms (well under 50ms budget)
+- Determinism verified: identical grid checksum across 3 consecutive runs
+- Loops always ≥1 (cyclomatic = E−V+1 matches stats.loops)
+- Reachability = 100% of floor cells on every seed
+- Generator is pure data (zero THREE imports) — ready for the presentation layer
+
+---
+Task ID: 12-17
+Agent: main
+Task: Build Three.js scene builder + control panel UI + end-to-end browser verification
+
+Work Log:
+- scene.ts: presentation layer — one InstancedMesh per kind (floor/wall/pillar/torch bracket/flame/debris/chest/brazier/crystal/portal/spawn-marker), baked per-instance AO (floor color = base × (1−0.09×min(adjWalls₈,4)) ± 5% value noise, 18% room-tint blend, corridors darker), wall height 2.2 ± 0.3 seeded jitter, Lambert level geometry + emissive flames/crystals, FogExp2 (scale-aware density), isometric ortho camera (yaw 45°, pitch 37°), zoom/pan, debug overlays (Delaunay/MST/loops/critical/difficulty-heatmap), staged build animation (flood→walls-rise→props-pop with light ramp), per-frame torch flicker + flame scale jitter, dispose()
+- dungeon-viewer.tsx: client-only Three.js viewer — canvas + floating control panel (seed/dice/regenerate/sliders/theme/overlay-toggles/animate-build) + right panel (minimap/stats/acceptance-tests/legend) + sticky footer, keyboard shortcuts (R/G/Space), wheel-zoom, drag-pan, auto-run acceptance tests, live perf measurement
+- page.tsx: dynamic ssr:false import of viewer (Three.js is browser-only) with loading screen
+- layout.tsx: updated metadata for the dungeon theme
+- Debugged 4 rendering issues via agent-browser + VLM:
+  (a) FogExp2 density 0.022 fogged everything to clear color at 140-unit scale → made density scale-aware (0.40/maxDim)
+  (b) Camera frustum/distance tuned for isometric fit ((W+H)*0.42 half-frustum, modest distance)
+  (c) Scene too dark → brightened theme palettes + hemisphere(1.3)/directional(0.75) + boosted point lights (torch 5.0/boss 6.0)
+  (d) Replaced deprecated THREE.Clock with performance.now()
+- Performance optimization (60-room gen was 80-250ms, now 13-30ms):
+  (a) Separation: switched from oscillating axis-of-min-penetration to convergent center-to-center push; increased scatter radius (3.2→5.6·√n) so rooms breathe and separation converges fast; cap 120 iters
+  (b) Torch placement: O(candidates×placed) linear scan → O(1) occupancy grid (markTorch stamps a 7×7 spacing block)
+  (c) Spawn shuffle: full Fisher-Yates of every room's cell list → partial Fisher-Yates (only shuffle the `need` positions we'll use)
+  (d) Perf test: 2 warmups + best-of-3 measurement to remove JIT noise
+- Verified end-to-end with agent-browser: 3D dungeon renders with vertical walls/rooms/corridors (VLM 9/10), torchlight pools visible (0.7% warm pixels), overlays work (red critical + cyan loops render), dice changes seed+name, build animation plays, 6/6 acceptance tests pass in UI (perf 7.4ms), mobile responsive with sticky footer
+
+Stage Summary:
+- ALL 6 acceptance tests pass for seeds {1,7,42,1337,99999} and room counts {42,60} in both bun and browser
+- 60-room generation: 7-14ms (best of 3) in browser, well under 50ms budget
+- 3D isometric dungeon renders correctly with baked AO, torchlight, fog, overlays, staged build animation
+- Control panel fully interactive (seed/dice/sliders/toggles/replay), minimap, live stats, legend, sticky footer
+- Clean lint, dev server stable on port 3000
+- Remaining: set up 15-min cron webDevReview task
