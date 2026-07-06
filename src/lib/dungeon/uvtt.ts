@@ -1,10 +1,11 @@
-// uvtt.ts — Universal VTT (.dd2vtt) export for Foundry VTT dd-import module.
-// Generates a top-down map PNG + wall/door/light data in UVTT format.
+// uvtt.ts — Universal VTT (.dd2vtt) export for Foundry VTT (Universal Battlemap
+// Importer / dd-import). Generates a top-down map PNG + wall/door/light data.
 //
-// UVTT line_of_sight format (dd-import expects this):
-//   Array of objects { x: number, y: number } where each PAIR of consecutive
-//   points defines a wall segment. So [p1, p2, p3, p4] = two segments: p1→p2 and p3→p4.
-//   NOT a flat array of x,y numbers.
+// UVTT line_of_sight format (Universal Battlemap Importer 6.x expects this):
+//   Array of ARRAYS, where each inner array is a wall segment made of points.
+//   A single wall segment = [{x,y}, {x,y}] (start + end).
+//   So: [ [p1,p2], [p3,p4] ] = two segments: p1→p2 and p3→p4.
+//   A flat array of {x,y} objects will crash dd-import GetWalls().
 
 import {
   Dungeon, FLOOR, WALL, VOID, Prop,
@@ -20,6 +21,7 @@ interface UVTTResolution {
 
 interface UVTTPortal {
   position: { x: number; y: number };
+  bounds: [{ x: number; y: number }, { x: number; y: number }];
   closed: boolean;
   freestanding: boolean;
   direction?: number;
@@ -33,13 +35,12 @@ interface UVTTLight {
   shadows: boolean;
 }
 
-// dd-import expects line_of_sight as array of {x,y} objects,
-// where each consecutive pair = one wall segment.
-// So walls = [start1, end1, start2, end2, ...]
+// Universal Battlemap Importer expects line_of_sight as an array of wall
+// segments, where each segment is itself an array of points [{x,y},{x,y}].
 interface UVTTFile {
   format: number;
   resolution: UVTTResolution;
-  line_of_sight: Array<{ x: number; y: number }>;
+  line_of_sight: Array<Array<{ x: number; y: number }>>;
   port: number;
   portals: UVTTPortal[];
   lights: UVTTLight[];
@@ -404,6 +405,76 @@ export function renderTopDownMap(
             ctx.fill();
           }
           break;
+        case 'table':
+          ctx.fillStyle = '#6a4a2a';
+          ctx.fillRect(px - s * 0.9, py - s * 0.5, s * 1.8, s);
+          ctx.strokeStyle = '#4a2a1a';
+          ctx.lineWidth = 2;
+          ctx.strokeRect(px - s * 0.9, py - s * 0.5, s * 1.8, s);
+          break;
+        case 'chair':
+          ctx.fillStyle = '#5a3a1a';
+          ctx.fillRect(px - s * 0.3, py - s * 0.3, s * 0.6, s * 0.6);
+          break;
+        case 'bookshelf':
+          ctx.fillStyle = '#3a2a1a';
+          ctx.fillRect(px - s * 0.4, py - s, s * 0.8, s * 2);
+          ctx.fillStyle = '#8a3a2a';
+          ctx.fillRect(px - s * 0.3, py - s * 0.8, s * 0.6, s * 0.15);
+          ctx.fillRect(px - s * 0.3, py - s * 0.4, s * 0.6, s * 0.15);
+          ctx.fillRect(px - s * 0.3, py, s * 0.6, s * 0.15);
+          ctx.fillRect(px - s * 0.3, py + s * 0.4, s * 0.6, s * 0.15);
+          break;
+        case 'candle':
+          ctx.fillStyle = '#dac8a0';
+          ctx.fillRect(px - s * 0.1, py - s * 0.2, s * 0.2, s * 0.5);
+          ctx.fillStyle = '#ffcc40';
+          ctx.beginPath();
+          ctx.arc(px, py - s * 0.35, s * 0.15, 0, Math.PI * 2);
+          ctx.fill();
+          break;
+        case 'rug':
+          ctx.fillStyle = 'rgba(120,40,40,0.35)';
+          ctx.fillRect(px - s * 0.9, py - s * 0.6, s * 1.8, s * 1.2);
+          ctx.strokeStyle = 'rgba(200,160,80,0.4)';
+          ctx.lineWidth = 1;
+          ctx.strokeRect(px - s * 0.9, py - s * 0.6, s * 1.8, s * 1.2);
+          break;
+        case 'pot':
+          ctx.fillStyle = '#5a4a3a';
+          ctx.beginPath();
+          ctx.ellipse(px, py, s * 0.5, s * 0.4, 0, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.strokeStyle = '#3a2a1a';
+          ctx.lineWidth = 2;
+          ctx.stroke();
+          break;
+        case 'door': {
+          // Draw door as a line across the corridor with a small arch
+          const r = p.rot;
+          const isHoriz = Math.abs(Math.sin(r)) < 0.5;
+          ctx.strokeStyle = '#8a5a2a';
+          ctx.lineWidth = 4;
+          ctx.beginPath();
+          if (isHoriz) {
+            ctx.moveTo(px - s * 1.1, py);
+            ctx.lineTo(px + s * 1.1, py);
+          } else {
+            ctx.moveTo(px, py - s * 1.1);
+            ctx.lineTo(px, py + s * 1.1);
+          }
+          ctx.stroke();
+          // door frame knobs
+          ctx.fillStyle = '#caa050';
+          if (isHoriz) {
+            ctx.beginPath(); ctx.arc(px - s * 1.1, py, 2, 0, Math.PI * 2); ctx.fill();
+            ctx.beginPath(); ctx.arc(px + s * 1.1, py, 2, 0, Math.PI * 2); ctx.fill();
+          } else {
+            ctx.beginPath(); ctx.arc(px, py - s * 1.1, 2, 0, Math.PI * 2); ctx.fill();
+            ctx.beginPath(); ctx.arc(px, py + s * 1.1, 2, 0, Math.PI * 2); ctx.fill();
+          }
+          break;
+        }
       }
     }
 
@@ -470,15 +541,18 @@ export function renderTopDownMap(
 
 /**
  * Extract wall segments for UVTT.
- * dd-import expects line_of_sight as an array of {x,y} objects where
- * each consecutive pair defines a wall segment.
- * So: [start1, end1, start2, end2, ...] = segments start1→end1, start2→end2, etc.
+ * Universal Battlemap Importer expects line_of_sight as an array of wall
+ * segments, where each segment is an array of points [{x,y},{x,y}].
+ * Returns: [ [{x,y},{x,y}], [{x,y},{x,y}], ... ]
  */
-function extractWallSegments(d: Dungeon): Array<{ x: number; y: number }> {
+function extractWallSegments(d: Dungeon): Array<Array<{ x: number; y: number }>> {
   const { W, H, grid } = d;
-  const segments: Array<{ x: number; y: number }> = [];
+  const walls: Array<Array<{ x: number; y: number }>> = [];
   const ppg = PIXELS_PER_GRID;
 
+  // For each WALL cell, emit a wall segment along every edge that borders a
+  // FLOOR cell. These are the perimeter walls. Doors live in the open passages
+  // (portal bounds) and are added separately — we do NOT punch gaps here.
   for (let y = 0; y < H; y++) {
     for (let x = 0; x < W; x++) {
       const i = y * W + x;
@@ -487,52 +561,50 @@ function extractWallSegments(d: Dungeon): Array<{ x: number; y: number }> {
       const px = x * ppg;
       const py = y * ppg;
 
-      // Top edge: floor above → wall segment on top
+      // Top edge: floor above
       if (y > 0 && grid[(y - 1) * W + x] === FLOOR) {
-        segments.push(
-          { x: px, y: py },           // start
-          { x: px + ppg, y: py },     // end
-        );
+        walls.push([{ x: px, y: py }, { x: px + ppg, y: py }]);
       }
       // Bottom edge: floor below
       if (y < H - 1 && grid[(y + 1) * W + x] === FLOOR) {
-        segments.push(
-          { x: px, y: py + ppg },
-          { x: px + ppg, y: py + ppg },
-        );
+        walls.push([{ x: px, y: py + ppg }, { x: px + ppg, y: py + ppg }]);
       }
       // Left edge: floor to the left
       if (x > 0 && grid[y * W + (x - 1)] === FLOOR) {
-        segments.push(
-          { x: px, y: py },
-          { x: px, y: py + ppg },
-        );
+        walls.push([{ x: px, y: py }, { x: px, y: py + ppg }]);
       }
       // Right edge: floor to the right
       if (x < W - 1 && grid[y * W + (x + 1)] === FLOOR) {
-        segments.push(
-          { x: px + ppg, y: py },
-          { x: px + ppg, y: py + ppg },
-        );
+        walls.push([{ x: px + ppg, y: py }, { x: px + ppg, y: py + ppg }]);
       }
     }
   }
 
-  return segments;
+  return walls;
 }
 
 /**
- * Extract portals (doors) from doorways.
+ * Extract portals (doors) from door props. Each door prop has a rotation that
+ * tells us which way the corridor runs:
+ *   rot ≈ 0  → door in an east-west wall (corridor runs north-south) → bounds horizontal
+ *   rot ≈ π/2 → door in a north-south wall (corridor runs east-west) → bounds vertical
+ * The `bounds` field (two endpoints) is REQUIRED by Universal Battlemap Importer.
  */
 function extractPortals(d: Dungeon): UVTTPortal[] {
   const ppg = PIXELS_PER_GRID;
   const portals: UVTTPortal[] = [];
-  for (const door of d.doorways) {
+  const doors = d.props.filter((p) => p.kind === 'door');
+  for (const door of doors) {
+    const cx = door.x * ppg + ppg / 2;
+    const cy = door.y * ppg + ppg / 2;
+    const r = ((door.rot % (Math.PI * 2)) + Math.PI * 2) % (Math.PI * 2);
+    const isHorizontal = r < Math.PI / 4 || r > (7 * Math.PI) / 4 || (r > (3 * Math.PI) / 4 && r < (5 * Math.PI) / 4);
+    const bounds: [{ x: number; y: number }, { x: number; y: number }] = isHorizontal
+      ? [{ x: door.x * ppg, y: cy }, { x: (door.x + 1) * ppg, y: cy }]
+      : [{ x: cx, y: door.y * ppg }, { x: cx, y: (door.y + 1) * ppg }];
     portals.push({
-      position: {
-        x: door.x * ppg + ppg / 2,
-        y: door.y * ppg + ppg / 2,
-      },
+      position: { x: cx, y: cy },
+      bounds,
       closed: true,
       freestanding: false,
     });

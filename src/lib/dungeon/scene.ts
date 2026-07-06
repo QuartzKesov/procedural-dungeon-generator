@@ -246,8 +246,12 @@ function stairsUpGeo(): THREE.BufferGeometry {
   return g;
 }
 function doorGeo(): THREE.BufferGeometry {
-  const g = new THREE.BoxGeometry(0.9, 1.6, 0.1);
-  g.translate(0, 0.8, 0);
+  // Door slab — tall thin panel. Width 0.9 along X, thin 0.12 along Z.
+  // When rotY=0 the slab spans east-west (blocks north-south passage);
+  // when rotY=π/2 it spans north-south (blocks east-west passage).
+  // A taller, thinner look reads clearly as a door from iso view.
+  const g = new THREE.BoxGeometry(0.95, 1.9, 0.12);
+  g.translate(0, 0.95, 0);
   return g;
 }
 function tableGeo(): THREE.BufferGeometry {
@@ -398,7 +402,7 @@ export function buildDungeonScene(d: Dungeon, opts: BuildOptions): DungeonScene 
   const stairsDownMat = new THREE.MeshLambertMaterial({ color: 0x2a2a30, emissive: 0x0a0a0e });
   const stairsUpMat = new THREE.MeshLambertMaterial({ color: 0x4a4a50, emissive: 0x1a1a20 });
   // ---- furniture materials ----
-  const doorMat = new THREE.MeshLambertMaterial({ color: 0x5a3a1a, emissive: 0x1a0a00 });
+  const doorMat = new THREE.MeshLambertMaterial({ color: 0x6a4220, emissive: 0x2a1404 });
   const tableMat = new THREE.MeshLambertMaterial({ color: 0x6a4a2a });
   const chairMat = new THREE.MeshLambertMaterial({ color: 0x5a3a1a });
   const bookshelfMat = new THREE.MeshLambertMaterial({ color: 0x4a3018, emissive: 0x100800 });

@@ -18,6 +18,7 @@ export type EditTool =
   | 'crystal'    // place shrine crystal
   | 'trap'       // place trap
   | 'teleport'   // place teleport
+  | 'door'       // place door (auto-oriented to corridor)
   | 'room_rect'  // stamp rectangular room
   | 'room_ellipse' // stamp elliptical room
   | 'room_octagon' // stamp octagonal room
@@ -117,6 +118,21 @@ export function addProp(
 ): EditAction {
   const prop: Prop = {
     kind, x, y, rot: 0, scale: 1, roomId: -1, flickerPhase: Math.random() * Math.PI * 2,
+  };
+  d.props.push(prop);
+  return { type: 'prop_add', prop };
+}
+
+// Add a door at (x, y) with orientation auto-detected from the surrounding
+// floor cells. If the floor is to the LEFT or RIGHT, the corridor runs
+// east-west → door is vertical (rot = π/2). Otherwise → horizontal (rot = 0).
+export function addDoor(d: Dungeon, x: number, y: number): EditAction {
+  const { W, H, grid } = d;
+  const left = x > 0 && grid[y * W + (x - 1)] === FLOOR;
+  const right = x < W - 1 && grid[y * W + (x + 1)] === FLOOR;
+  const rot = (left || right) ? Math.PI / 2 : 0;
+  const prop: Prop = {
+    kind: 'door', x, y, rot, scale: 1, roomId: -1, flickerPhase: 0,
   };
   d.props.push(prop);
   return { type: 'prop_add', prop };

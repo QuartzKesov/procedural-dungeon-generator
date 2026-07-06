@@ -947,9 +947,54 @@ function decorate(rng: RNG, dungeon: Dungeon & {
     }
   }
 
-  // ---- Doors at doorway cells ----
-  for (const door of dungeon.doorways) {
-    props.push({ kind: 'door', x: door.x, y: door.y, rot: 0, scale: 1, roomId: -1, flickerPhase: 0 });
+  // ---- Doors at doorway cells (grouped + oriented per corridor direction) ----
+  // computeDoorways marks every corridor cell adjacent to a room. A single
+  // corridor mouth can be several cells wide, so we group connected doorway
+  // cells and place ONE door per group, oriented perpendicular to the corridor.
+  {
+    const doorSet = new Set(dungeon.doorways.map((dc) => dc.y * W + dc.x));
+    const placed = new Set<number>();
+    for (const start of dungeon.doorways) {
+      const startKey = start.y * W + start.x;
+      if (placed.has(startKey)) continue;
+      // BFS to collect the whole connected doorway group (4-connectivity)
+      const group: Cell[] = [];
+      const queue: Cell[] = [start];
+      placed.add(startKey);
+      while (queue.length) {
+        const c = queue.shift()!;
+        group.push(c);
+        for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]] as const) {
+          const nx = c.x + dx, ny = c.y + dy;
+          if (nx < 0 || ny < 0 || nx >= W || ny >= H) continue;
+          const nk = ny * W + nx;
+          if (placed.has(nk) || !doorSet.has(nk)) continue;
+          placed.add(nk);
+          queue.push({ x: nx, y: ny });
+        }
+      }
+      // pick the cell closest to the group centroid
+      let sx = 0, sy = 0;
+      for (const c of group) { sx += c.x; sy += c.y; }
+      const ccx = Math.round(sx / group.length);
+      const ccy = Math.round(sy / group.length);
+      let best = group[0];
+      let bestD = Infinity;
+      for (const c of group) {
+        const dd = (c.x - ccx) * (c.x - ccx) + (c.y - ccy) * (c.y - ccy);
+        if (dd < bestD) { bestD = dd; best = c; }
+      }
+      // Determine orientation: if a room floor is to the LEFT or RIGHT of the
+      // door cell, the corridor runs east-west → the door blocks E-W passage →
+      // the door slab is vertical (rot = π/2). Otherwise the corridor runs
+      // north-south → door slab is horizontal (rot = 0).
+      const di = best.y * W + best.x;
+      const roomLeft = best.x > 0 && roomOwner[di - 1] > 0;
+      const roomRight = best.x < W - 1 && roomOwner[di + 1] > 0;
+      const rot = (roomLeft || roomRight) ? Math.PI / 2 : 0;
+      props.push({ kind: 'door', x: best.x, y: best.y, rot, scale: 1, roomId: -1, flickerPhase: 0 });
+      blocked[best.y * W + best.x] = 1;
+    }
   }
 
   // ---- Furniture: tables, chairs, bookshelves, candles, rugs, pots ----

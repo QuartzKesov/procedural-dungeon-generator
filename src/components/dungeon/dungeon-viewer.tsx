@@ -28,7 +28,7 @@ import { downloadExport } from '@/lib/dungeon/export';
 import { downloadUVTT, downloadTopDownPNG, downloadTopDownPNGClean } from '@/lib/dungeon/uvtt';
 import type { WeatherType } from '@/lib/dungeon/types';
 import {
-  createEditorState, cloneDungeonForEdit, editGrid, stampRoom, addProp,
+  createEditorState, cloneDungeonForEdit, editGrid, stampRoom, addProp, addDoor,
   recomputeWalls, undoAction, redoAction, pushHistory, saveEditedDungeon,
   type EditorState, type EditTool, type EditAction,
 } from '@/lib/dungeon/editor';
@@ -224,6 +224,8 @@ export function DungeonViewer() {
         action = addProp(work, 'trap', gridX, gridY);
       } else if (tool === 'teleport') {
         action = addProp(work, 'teleport', gridX, gridY);
+      } else if (tool === 'door') {
+        action = addDoor(work, gridX, gridY);
       }
       if (action) {
         // for grid edits, recompute walls
@@ -539,6 +541,10 @@ export function DungeonViewer() {
   }, []);
 
   // ---- rebuild scene when activeDungeon changes ----
+  // Track the previous dungeon signature so we can tell a full regeneration
+  // (new seed / level / size) apart from an in-place edit. Edits must NOT
+  // reset the camera — otherwise every brush stroke jumps the view back.
+  const prevDungeonSigRef = useRef<string>('');
   useEffect(() => {
     const state = threeRef.current;
     if (!state) return;
@@ -552,23 +558,36 @@ export function DungeonViewer() {
     });
     state.scene.add(ds.group);
     state.dungeonScene = ds;
-    // reset camera pan/zoom to fit + refresh fog density for the new scale
-    state.zoom = 1; state.pan.set(0, 0);
+
+    const sig = `${activeDungeon.W}x${activeDungeon.H}-${activeDungeon.params.seed}-L${activeDungeon.params.currentLevel}`;
+    const isEdit = !!editorStateRef.current?.enabled && sig === prevDungeonSigRef.current;
+    prevDungeonSigRef.current = sig;
+
     (state as any).setCurrentDungeon?.(activeDungeon);
     if (state.scene.fog instanceof THREE.FogExp2) {
       state.scene.fog.density = fogDensityFor(activeDungeon);
     }
-    const container = containerRef.current!;
-    const aspect = container.clientWidth / container.clientHeight;
-    const cam = makeIsoCamera(activeDungeon, aspect);
-    state.camera.left = cam.left; state.camera.right = cam.right;
-    state.camera.top = cam.top; state.camera.bottom = cam.bottom;
-    state.camera.near = cam.near; state.camera.far = cam.far;
-    state.camera.position.copy(cam.position);
-    state.camera.lookAt(0, 0, 0);
-    state.camera.updateProjectionMatrix();
+
+    if (!isEdit) {
+      // Full regeneration: reset pan/zoom and re-fit the camera.
+      state.zoom = 1; state.pan.set(0, 0);
+      const container = containerRef.current!;
+      const aspect = container.clientWidth / container.clientHeight;
+      const cam = makeIsoCamera(activeDungeon, aspect);
+      state.camera.left = cam.left; state.camera.right = cam.right;
+      state.camera.top = cam.top; state.camera.bottom = cam.bottom;
+      state.camera.near = cam.near; state.camera.far = cam.far;
+      state.camera.position.copy(cam.position);
+      state.camera.lookAt(0, 0, 0);
+      state.camera.updateProjectionMatrix();
+    } else {
+      // In-place edit: keep the current camera/frustum untouched so the view
+      // doesn't jump. The render loop will redraw with the new geometry.
+      (state as any).applyCameraRot?.();
+    }
+
     // start build animation (skip when editing — instant rebuild)
-    if (animateBuild && !editorState.enabled) {
+    if (animateBuild && !editorStateRef.current?.enabled && !isEdit) {
       buildAnimRef.current = { active: true, progress: 0 };
       ds.setBuildProgress(0);
     } else {
@@ -1223,6 +1242,7 @@ export function DungeonViewer() {
                         { t: 'crystal', l: 'Кристалл', c: '#6ad0ff' },
                         { t: 'trap', l: 'Ловушка', c: '#8a3a3a' },
                         { t: 'teleport', l: 'Телепорт', c: '#dd44ff' },
+                        { t: 'door', l: 'Дверь', c: '#caa050' },
                       ] as Array<{ t: EditTool; l: string; c: string }>).map((tool) => (
                         <button
                           key={tool.t}
