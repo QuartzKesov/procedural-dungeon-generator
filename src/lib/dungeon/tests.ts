@@ -93,7 +93,8 @@ function placement(d: Dungeon): { pass: boolean; detail: string } {
   };
   for (const p of d.props) checkCell(p.x, p.y);
   for (const s of d.spawns) checkCell(s.x, s.y);
-  // torches/braziers/cobwebs legitimately sit ON wall cells — re-allow wall for those.
+  for (const e of d.events) checkCell(e.x, e.y);
+  // torches/braziers/cobwebs/banners legitimately sit ON wall cells — re-allow wall for those.
   // Count those back out:
   let wallOk = 0;
   for (const p of d.props) {
@@ -103,7 +104,7 @@ function placement(d: Dungeon): { pass: boolean; detail: string } {
   }
   bad -= wallOk;
   const lightOk = d.stats.lights <= 12;
-  return { pass: bad === 0 && lightOk, detail: `badPlacements=${bad} ${bad === 0 ? '✓' : '✗'} | lights=${d.stats.lights}/12 ${lightOk ? '✓' : '✗'}` };
+  return { pass: bad === 0 && lightOk, detail: `badPlacements=${bad} ${bad === 0 ? '✓' : '✗'} | lights=${d.stats.lights}/12 ${lightOk ? '✓' : '✗'} | events=${d.events.length}` };
 }
 
 // 60-room generation < 50 ms (warmed up + best-of-3 to remove JIT noise)

@@ -22,7 +22,10 @@ import {
   Link2, Volume2, VolumeX, Crosshair, Skull, DoorOpen, Sparkles,
   Save, Bookmark, Trash2, Download, RotateCw, Route,
   Sun, Moon, History, X, Info, List, Keyboard,
+  ArrowDown, ArrowUp, CloudRain, Snowflake, Flame, FileJson, Columns2, Images,
 } from 'lucide-react';
+import { downloadExport } from '@/lib/dungeon/export';
+import type { WeatherType } from '@/lib/dungeon/types';
 
 interface ThreeState {
   renderer: THREE.WebGLRenderer;
@@ -75,6 +78,9 @@ export function DungeonViewer() {
   const [showRoomList, setShowRoomList] = useState(false);
   const [roomListFilter, setRoomListFilter] = useState<string>('all');
   const [showHelp, setShowHelp] = useState(false);
+  const [showCompare, setShowCompare] = useState(false);
+  const [compareSeed, setCompareSeed] = useState<number>(0);
+  const [showGallery, setShowGallery] = useState(false);
 
   // Generate the dungeon whenever params change. Fast (~25ms) → synchronous.
   const dungeon = useMemo<Dungeon>(() => generateDungeon(params), [params]);
@@ -82,7 +88,7 @@ export function DungeonViewer() {
 
   // ---- sync params → URL hash (shareable seeds) ----
   useEffect(() => {
-    const hash = `#seed=${params.seed}&rooms=${params.roomCount}&loops=${params.loopChance}&decor=${params.decorDensity}&theme=${params.theme}`;
+    const hash = `#seed=${params.seed}&rooms=${params.roomCount}&loops=${params.loopChance}&decor=${params.decorDensity}&theme=${params.theme}&events=${params.eventDensity}&weather=${params.weather}&ml=${params.multiLevel?1:0}&lv=${params.levelCount}`;
     if (hash !== window.location.hash) {
       window.history.replaceState(null, '', hash);
     }
@@ -893,6 +899,54 @@ export function DungeonViewer() {
                 </Select>
               </div>
 
+              {/* ---- Event density slider ---- */}
+              <SliderRow label="Events" value={params.eventDensity} min={0} max={1} step={0.05}
+                display={params.eventDensity.toFixed(2)} onChange={(v) => setParams((p) => ({ ...p, eventDensity: v }))} />
+
+              {/* ---- Weather select ---- */}
+              <div className="space-y-2">
+                <Label className="text-xs uppercase tracking-wider text-amber-200/50">Weather</Label>
+                <Select value={params.weather} onValueChange={(v) => setParams((p) => ({ ...p, weather: v as WeatherType }))}>
+                  <SelectTrigger className="border-amber-900/40 bg-amber-950/20 text-amber-100">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent className="border-amber-900/40 bg-black/90 text-amber-100">
+                    {(['none', 'rain', 'snow', 'ash'] as WeatherType[]).map((w) => (
+                      <SelectItem key={w} value={w} className="capitalize">{w}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              {/* ---- Multi-level toggle + level controls ---- */}
+              <div className="space-y-2">
+                <div className="flex items-center justify-between rounded-lg border border-amber-900/30 bg-amber-950/10 px-3 py-1.5">
+                  <Label className="text-xs text-amber-100/80">Multi-Level</Label>
+                  <Switch checked={params.multiLevel} onCheckedChange={(v) => setParams((p) => ({ ...p, multiLevel: v, currentLevel: 0 }))} />
+                </div>
+                {params.multiLevel && (
+                  <div className="space-y-2">
+                    <SliderRow label="Floors" value={params.levelCount} min={1} max={5} step={1}
+                      display={`${params.levelCount}`} onChange={(v) => setParams((p) => ({ ...p, levelCount: v, currentLevel: 0 }))} />
+                    <div className="flex items-center gap-2">
+                      <span className="text-[10px] text-amber-300/50">Floor {params.currentLevel + 1}/{params.levelCount}</span>
+                      <div className="flex gap-1">
+                        <Button size="sm" variant="outline" disabled={params.currentLevel === 0}
+                          onClick={() => setParams((p) => ({ ...p, currentLevel: Math.max(0, p.currentLevel - 1), seed: p.seed }))}
+                          className="h-6 w-6 border-amber-800/40 bg-amber-950/20 p-0 text-amber-300 hover:bg-amber-900/40">
+                          <ArrowUp className="h-3 w-3" />
+                        </Button>
+                        <Button size="sm" variant="outline" disabled={params.currentLevel >= params.levelCount - 1}
+                          onClick={() => setParams((p) => ({ ...p, currentLevel: Math.min(p.levelCount - 1, p.currentLevel + 1) }))}
+                          className="h-6 w-6 border-amber-800/40 bg-amber-950/20 p-0 text-amber-300 hover:bg-amber-900/40">
+                          <ArrowDown className="h-3 w-3" />
+                        </Button>
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </div>
+
               {/* seed history */}
               {seedHistory.length > 1 && (
                 <div className="space-y-1.5">
@@ -917,6 +971,26 @@ export function DungeonViewer() {
                   <RefreshCw className="mr-2 h-4 w-4" /> Regenerate
                 </Button>
               </div>
+
+              {/* ---- Export / Gallery / Compare buttons ---- */}
+              <div className="grid grid-cols-3 gap-2">
+                <Button size="sm" variant="outline" onClick={() => downloadExport(dungeon, 'dungeon-json')}
+                  className="border-amber-800/40 bg-amber-950/20 text-xs text-amber-300 hover:bg-amber-900/30" title="Export as JSON">
+                  <FileJson className="mr-1 h-3.5 w-3.5" /> JSON
+                </Button>
+                <Button size="sm" variant="outline" onClick={() => downloadExport(dungeon, 'tiled')}
+                  className="border-amber-800/40 bg-amber-950/20 text-xs text-amber-300 hover:bg-amber-900/30" title="Export as Tiled">
+                  <Layers className="mr-1 h-3.5 w-3.5" /> Tiled
+                </Button>
+                <Button size="sm" variant="outline" onClick={() => { setCompareSeed(params.seed); setShowCompare(true); }}
+                  className="border-amber-800/40 bg-amber-950/20 text-xs text-amber-300 hover:bg-amber-900/30" title="Compare two seeds">
+                  <Columns2 className="mr-1 h-3.5 w-3.5" /> Compare
+                </Button>
+              </div>
+              <Button size="sm" variant="outline" onClick={() => setShowGallery(true)}
+                className="w-full border-amber-800/40 bg-amber-950/20 text-xs text-amber-300 hover:bg-amber-900/30">
+                <Images className="mr-1.5 h-3.5 w-3.5" /> Gallery
+              </Button>
 
               {/* Presets: save / load / delete */}
               <div className="space-y-2">
@@ -1233,6 +1307,26 @@ export function DungeonViewer() {
         />
       )}
 
+      {/* ---- Compare overlay ---- */}
+      {showCompare && (
+        <CompareOverlay
+          dungeonA={dungeon}
+          seedB={compareSeed}
+          params={params}
+          onClose={() => setShowCompare(false)}
+          onSeedBChange={setCompareSeed}
+        />
+      )}
+
+      {/* ---- Gallery overlay ---- */}
+      {showGallery && (
+        <GalleryOverlay
+          presets={presets}
+          onClose={() => setShowGallery(false)}
+          onLoad={(p) => { setParams({ ...p }); setShowGallery(false); }}
+        />
+      )}
+
       {/* Sticky footer */}
       <footer className="z-10 mt-auto border-t border-amber-900/30 bg-black/80 px-4 py-2 backdrop-blur-md">
         <div className="mx-auto flex max-w-7xl flex-wrap items-center justify-between gap-2 text-[11px] text-amber-200/50">
@@ -1298,6 +1392,145 @@ function HelpOverlay({ onClose }: { onClose: () => void }) {
       </div>
     </div>
   );
+}
+
+// ---- Compare stat row helper ----
+function CompareStat({ k, a, b }: { k: string; a: string | number; b: string | number }) {
+  return (
+    <div className="flex items-center justify-between border-b border-amber-900/20 py-0.5 text-[11px] font-mono">
+      <span className="text-amber-200/40">{k}</span>
+      <span className="text-amber-100/80">{a}</span>
+      <span className="text-amber-300/40">vs</span>
+      <span className="text-amber-100/80">{b}</span>
+    </div>
+  );
+}
+
+// ---- Compare Overlay (two dungeons side by side) ----
+function CompareOverlay({ dungeonA, seedB, params, onClose, onSeedBChange }: {
+  dungeonA: Dungeon; seedB: number; params: Params; onClose: () => void; onSeedBChange: (s: number) => void;
+}) {
+  const dungeonB = useMemo(() => generateDungeon({ ...params, seed: seedB, currentLevel: 0 }), [params, seedB]);
+  return (
+    <div className="fixed inset-0 z-[90] flex items-center justify-center bg-black/80 backdrop-blur-sm" onClick={onClose}>
+      <div className="pointer-events-auto w-[min(40rem,calc(100vw-2rem))] animate-in fade-in zoom-in-95 duration-200" onClick={(e) => e.stopPropagation()}>
+        <div className="rounded-2xl border border-amber-800/50 bg-black/90 p-6 shadow-2xl backdrop-blur-md">
+          <div className="mb-4 flex items-center justify-between">
+            <h2 className="font-serif text-base text-amber-100">Seed Comparison</h2>
+            <button onClick={onClose} className="text-amber-300/50 hover:text-amber-100"><X className="h-5 w-5" /></button>
+          </div>
+          <div className="mb-3 flex items-center gap-2">
+            <span className="text-xs text-amber-200/50">Seed A:</span>
+            <span className="font-mono text-xs text-amber-100">{dungeonA.params.seed}</span>
+            <span className="mx-2 text-amber-300/30">|</span>
+            <span className="text-xs text-amber-200/50">Seed B:</span>
+            <Input type="number" value={seedB} onChange={(e) => onSeedBChange(Math.max(0, parseInt(e.target.value || '0', 10)) >>> 0)}
+              className="h-7 w-24 border-amber-900/40 bg-amber-950/20 font-mono text-xs text-amber-100" />
+            <Button size="sm" variant="outline" onClick={() => onSeedBChange(Math.floor(Math.random() * 1e9) >>> 0)}
+              className="h-7 border-amber-800/40 bg-amber-950/20 px-2 text-xs text-amber-300 hover:bg-amber-900/30">
+              <Dices className="h-3 w-3" />
+            </Button>
+          </div>
+          <div className="grid grid-cols-[auto_1fr_auto_1fr] gap-x-3">
+            <CompareStat k="Rooms" a={dungeonA.stats.rooms} b={dungeonB.stats.rooms} />
+            <CompareStat k="Loops" a={dungeonA.stats.loops} b={dungeonB.stats.loops} />
+            <CompareStat k="Floor" a={dungeonA.stats.floorTiles} b={dungeonB.stats.floorTiles} />
+            <CompareStat k="Wall" a={dungeonA.stats.wallTiles} b={dungeonB.stats.wallTiles} />
+            <CompareStat k="Props" a={dungeonA.stats.props} b={dungeonB.stats.props} />
+            <CompareStat k="Spawns" a={dungeonA.stats.spawns} b={dungeonB.stats.spawns} />
+            <CompareStat k="Events" a={dungeonA.stats.events} b={dungeonB.stats.events} />
+            <CompareStat k="Max Depth" a={dungeonA.stats.maxDepth} b={dungeonB.stats.maxDepth} />
+            <CompareStat k="Critical" a={`${dungeonA.stats.criticalLength}h`} b={`${dungeonB.stats.criticalLength}h`} />
+            <CompareStat k="Gen" a={`${dungeonA.stats.genMs.toFixed(1)}ms`} b={`${dungeonB.stats.genMs.toFixed(1)}ms`} />
+          </div>
+          <div className="mt-3 grid grid-cols-2 gap-4">
+            <div>
+              <div className="mb-1 text-center text-[10px] text-amber-200/50">A: {dungeonA.name.slice(0, 30)}</div>
+              <MinimapThumb dungeon={dungeonA} />
+            </div>
+            <div>
+              <div className="mb-1 text-center text-[10px] text-amber-200/50">B: {dungeonB.name.slice(0, 30)}</div>
+              <MinimapThumb dungeon={dungeonB} />
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ---- Gallery Overlay (saved presets as thumbnails) ----
+function GalleryOverlay({ presets, onClose, onLoad }: {
+  presets: Preset[]; onClose: () => void; onLoad: (p: Params) => void;
+}) {
+  return (
+    <div className="fixed inset-0 z-[90] flex items-center justify-center bg-black/80 backdrop-blur-sm" onClick={onClose}>
+      <div className="pointer-events-auto w-[min(44rem,calc(100vw-2rem))] max-h-[80vh] animate-in fade-in zoom-in-95 duration-200" onClick={(e) => e.stopPropagation()}>
+        <div className="rounded-2xl border border-amber-800/50 bg-black/90 p-6 shadow-2xl backdrop-blur-md">
+          <div className="mb-4 flex items-center justify-between">
+            <h2 className="font-serif text-base text-amber-100">Gallery</h2>
+            <button onClick={onClose} className="text-amber-300/50 hover:text-amber-100"><X className="h-5 w-5" /></button>
+          </div>
+          {presets.length === 0 ? (
+            <p className="py-8 text-center text-sm text-amber-300/40">No saved presets yet. Save some from the left panel!</p>
+          ) : (
+            <div className="grid max-h-96 grid-cols-2 gap-3 overflow-y-auto sm:grid-cols-3">
+              {presets.map((p) => {
+                const d = generateDungeon(p.params);
+                return (
+                  <button key={p.name} onClick={() => onLoad(p.params)}
+                    className="group rounded-lg border border-amber-900/30 bg-amber-950/10 p-2 transition-colors hover:border-amber-700/50 hover:bg-amber-900/20">
+                    <MinimapThumb dungeon={d} />
+                    <div className="mt-1.5 truncate text-[10px] font-serif text-amber-100/80">{p.name}</div>
+                    <div className="font-mono text-[8px] text-amber-300/40">seed {p.params.seed} · {p.params.theme}</div>
+                  </button>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ---- Minimap thumbnail (canvas rendering for compare/gallery) ----
+function MinimapThumb({ dungeon }: { dungeon: Dungeon }) {
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+    const d = dungeon;
+    const W = canvas.width, H = canvas.height;
+    ctx.fillStyle = '#05040a';
+    ctx.fillRect(0, 0, W, H);
+    const sx = W / d.W, sy = H / d.H;
+    const owner = new Int16Array(d.W * d.H);
+    for (const r of d.rooms) for (const c of roomFloorCells(r)) {
+      if (c.x < 0 || c.y < 0 || c.x >= d.W || c.y >= d.H) continue;
+      if (d.grid[c.y * d.W + c.x] === FLOOR) owner[c.y * d.W + c.x] = r.id + 1;
+    }
+    const colors: Record<string, string> = {
+      entrance: '#6a8cff', boss: '#ff3a2a', treasure: '#ffd24a',
+      shrine: '#40d0ff', elite: '#ff7a3a', combat: '#9a8a78',
+    };
+    for (let y = 0; y < d.H; y++) {
+      for (let x = 0; x < d.W; x++) {
+        const i = y * d.W + x;
+        const v = d.grid[i];
+        if (v === FLOOR) {
+          const rid = owner[i] - 1;
+          const type = rid >= 0 ? d.rooms[rid].type : 'combat';
+          ctx.fillStyle = colors[type] ?? '#6a6258';
+        } else if (v === WALL) { ctx.fillStyle = '#1c1814'; }
+        else continue;
+        ctx.fillRect(x * sx, y * sy, Math.ceil(sx) + 1, Math.ceil(sy) + 1);
+      }
+    }
+  }, [dungeon]);
+  return <canvas ref={canvasRef} width={140} height={120} className="h-auto w-full rounded border border-amber-900/30" />;
 }
 
 // ---- small presentational helpers ----
@@ -1575,6 +1808,10 @@ function parseHashParams(): Params {
       else if (k === 'loops') p.loopChance = Math.max(0, Math.min(0.5, parseFloat(v) || DEFAULT_PARAMS.loopChance));
       else if (k === 'decor') p.decorDensity = Math.max(0, Math.min(1, parseFloat(v) || DEFAULT_PARAMS.decorDensity));
       else if (k === 'theme' && ['crypt', 'cavern', 'catacomb', 'forge', 'ice', 'jungle'].includes(v)) p.theme = v as Theme;
+      else if (k === 'events') p.eventDensity = Math.max(0, Math.min(1, parseFloat(v) || DEFAULT_PARAMS.eventDensity));
+      else if (k === 'weather' && ['none', 'rain', 'snow', 'ash'].includes(v)) p.weather = v as WeatherType;
+      else if (k === 'ml') p.multiLevel = v === '1';
+      else if (k === 'lv') p.levelCount = Math.max(1, Math.min(5, parseInt(v, 10) || 1));
     }
   } catch { /* ignore */ }
   return p;

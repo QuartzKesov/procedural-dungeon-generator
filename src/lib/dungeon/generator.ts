@@ -5,7 +5,7 @@
 import { makeRng, hashString, type RNG } from './rng';
 import {
   DEFAULT_PARAMS, Params, Dungeon, Room, Edge, Cell, Prop, Spawn, Stats,
-  RoomShape, RoomType, PropKind, Theme,
+  RoomShape, RoomType, PropKind, Theme, DungeonEvent, EventType,
   VOID, FLOOR, WALL, idx, inBounds,
 } from './types';
 import {
@@ -955,7 +955,52 @@ function decorate(rng: RNG, dungeon: Dungeon & {
     torchBudget, rng,
   ).map((i) => torchPropIdx[i]);
 
-  return { props, spawns, litTorchPropIds };
+  // ---- Events: traps, teleports, altars, merchants ----
+  const events: DungeonEvent[] = [];
+  const eventDensity = dungeon.params.eventDensity ?? 0.3;
+  for (const rm of rooms) {
+    if (rm.type === 'entrance' || rm.type === 'boss') continue;
+    if (rng.float() >= eventDensity) continue;
+    // pick event type based on room type
+    let etype: EventType;
+    const r = rng.float();
+    if (rm.type === 'combat') {
+      // combat rooms: mostly traps, some teleports
+      etype = r < 0.5 ? 'trap' : r < 0.8 ? 'teleport' : 'altar';
+    } else if (rm.type === 'treasure') {
+      // treasure rooms: sometimes merchants
+      etype = r < 0.6 ? 'merchant' : 'trap';
+    } else if (rm.type === 'shrine') {
+      etype = 'altar';
+    } else if (rm.type === 'elite') {
+      etype = r < 0.5 ? 'trap' : 'teleport';
+    } else {
+      etype = 'trap';
+    }
+    const avail = roomCells[rm.id].filter((c) => !blocked[c.y * W + c.x]);
+    if (avail.length === 0) continue;
+    const c = avail[rng.int(0, avail.length - 1)];
+    blocked[c.y * W + c.x] = 1;
+    const ev: DungeonEvent = { type: etype, x: c.x, y: c.y, roomId: rm.id, data: 0 };
+    if (etype === 'trap') {
+      ev.data = Math.round(10 + rm.difficulty * 40); // damage 10-50
+    } else if (etype === 'teleport') {
+      // teleport to a random other room center
+      const targetRoom = rooms[rng.int(0, rooms.length - 1)];
+      ev.targetX = targetRoom.cx;
+      ev.targetY = targetRoom.cy;
+      ev.data = targetRoom.id;
+    } else if (etype === 'altar') {
+      ev.data = rng.int(0, 2); // 0=heal, 1=buff, 2=mana
+    } else if (etype === 'merchant') {
+      ev.data = rng.int(50, 200); // gold available
+    }
+    events.push(ev);
+    // also place a prop marker for rendering
+    props.push({ kind: etype as unknown as PropKind, x: c.x, y: c.y, rot: 0, scale: 1, roomId: rm.id, flickerPhase: 0 });
+  }
+
+  return { props, spawns, litTorchPropIds, events };
 }
 
 // ---- Farthest-point sampling ---------------------------------------------
@@ -1088,21 +1133,48 @@ function coreGenerate(params: Params, seed: number): Dungeon {
   // 8. decorate
   const doorwaySet = new Set(doorways.map((d) => d.y * W + d.x));
   assignTints(rng.fork('tints'), rooms, params.theme);
+  // set floor number on rooms
+  for (const rm of rooms) rm.floor = params.currentLevel ?? 0;
   const baseDungeon: Dungeon = {
     params: { ...params, seed: params.seed }, name: '', W, H, grid, bfs,
     rooms, edges, doorways, corridorCells: dungeonTransient.corridorCells,
-    props: [], spawns: [], stats: {} as Stats, entranceId, bossId,
+    props: [], spawns: [], events: [], stats: {} as Stats, entranceId, bossId,
     // @ts-expect-error litTorchPropIds is an extension to the data contract
     litTorchPropIds: [],
   };
-  const { props, spawns, litTorchPropIds } = decorate(
+  const { props, spawns, litTorchPropIds, events } = decorate(
     rng.fork('decorate'),
     Object.assign(baseDungeon, { roomOwner, isCorridor }) as any,
     rooms, entranceId, bossId, treasureRoomIds, shrineIds, doorwaySet,
   );
   baseDungeon.props = props;
   baseDungeon.spawns = spawns;
+  baseDungeon.events = events;
   (baseDungeon as any).litTorchPropIds = litTorchPropIds;
+
+  // ---- multi-level: place stairs ----
+  if (params.multiLevel) {
+    const level = params.currentLevel ?? 0;
+    // stairs down (not on top floor)
+    if (level < params.levelCount - 1) {
+      const bossRoom = rooms[bossId];
+      // place near boss room center offset
+      const sx = bossRoom.cx + 1, sy = bossRoom.cy + 1;
+      if (sx >= 0 && sy >= 0 && sx < W && sy < H && grid[sy * W + sx] === FLOOR) {
+        baseDungeon.stairsDown = { x: sx, y: sy };
+        props.push({ kind: 'stairs_down', x: sx, y: sy, rot: 0, scale: 1, roomId: bossId, flickerPhase: 0 });
+      }
+    }
+    // stairs up (not on ground floor)
+    if (level > 0) {
+      const entRoom = rooms[entranceId];
+      const sx = entRoom.cx + 1, sy = entRoom.cy + 1;
+      if (sx >= 0 && sy >= 0 && sx < W && sy < H && grid[sy * W + sx] === FLOOR) {
+        baseDungeon.stairsUp = { x: sx, y: sy };
+        props.push({ kind: 'stairs_up', x: sx, y: sy, rot: 0, scale: 1, roomId: entranceId, flickerPhase: 0 });
+      }
+    }
+  }
 
   // 9. name + stats
   baseDungeon.name = generateDungeonName(rng.fork('name'));
@@ -1127,6 +1199,8 @@ function coreGenerate(params: Params, seed: number): Dungeon {
     genMs: t1 - t0,
     maxDepth: maxGraphDepth,
     checksum: gridChecksum(grid),
+    events: events.length,
+    level: params.currentLevel ?? 0,
   };
   (baseDungeon as any).maxGridDepth = maxGridDepth;
   return baseDungeon;

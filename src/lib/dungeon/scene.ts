@@ -5,9 +5,10 @@
 
 import * as THREE from 'three';
 import {
-  Dungeon, Room, FLOOR, WALL, VOID, Prop, RoomType,
+  Dungeon, Room, FLOOR, WALL, VOID, Prop, RoomType, DungeonEvent,
 } from './types';
 import { roomFloorCells } from './generator';
+import { createWaterMaterial, createLavaMaterial } from './water-shader';
 
 export interface OverlayToggles {
   delaunay: boolean;
@@ -208,6 +209,43 @@ function bannerGeo(): THREE.BufferGeometry {
   g.translate(0, 1.3, 0);
   return g;
 }
+function trapGeo(): THREE.BufferGeometry {
+  // a trap — spiked plate on the floor
+  const g = new THREE.CylinderGeometry(0.35, 0.35, 0.05, 8);
+  g.translate(0, 0.025, 0);
+  return g;
+}
+function teleportGeo(): THREE.BufferGeometry {
+  // a teleport — glowing ring on the floor
+  const g = new THREE.TorusGeometry(0.35, 0.05, 6, 16);
+  g.rotateX(-Math.PI / 2);
+  g.translate(0, 0.05, 0);
+  return g;
+}
+function altarGeo(): THREE.BufferGeometry {
+  // an altar — small stone table
+  const g = new THREE.BoxGeometry(0.6, 0.4, 0.6);
+  g.translate(0, 0.2, 0);
+  return g;
+}
+function merchantGeo(): THREE.BufferGeometry {
+  // a merchant stall — small box with a canopy
+  const g = new THREE.BoxGeometry(0.8, 0.5, 0.5);
+  g.translate(0, 0.25, 0);
+  return g;
+}
+function stairsDownGeo(): THREE.BufferGeometry {
+  // stairs going down — dark descending steps
+  const g = new THREE.BoxGeometry(0.9, 0.1, 0.9);
+  g.translate(0, 0.05, 0);
+  return g;
+}
+function stairsUpGeo(): THREE.BufferGeometry {
+  // stairs going up — ascending steps
+  const g = new THREE.BoxGeometry(0.9, 0.3, 0.9);
+  g.translate(0, 0.15, 0);
+  return g;
+}
 
 // ---- The scene handle ----------------------------------------------------
 export interface DungeonScene {
@@ -275,6 +313,14 @@ export function buildDungeonScene(d: Dungeon, opts: BuildOptions): DungeonScene 
   const chandeliers = d.props.filter((p) => p.kind === 'chandelier');
   const cobwebs = d.props.filter((p) => p.kind === 'cobweb');
   const banners = d.props.filter((p) => p.kind === 'banner');
+  // ---- event props ----
+  const traps = d.props.filter((p) => p.kind === 'trap');
+  const teleports = d.props.filter((p) => p.kind === 'teleport');
+  const altars = d.props.filter((p) => p.kind === 'altar');
+  const merchants = d.props.filter((p) => p.kind === 'merchant');
+  // ---- stairs props ----
+  const stairsDown = d.props.filter((p) => p.kind === 'stairs_down');
+  const stairsUp = d.props.filter((p) => p.kind === 'stairs_up');
   const litTorchPropIds: number[] = (d as any).litTorchPropIds ?? [];
   const litTorchSet = new Set(litTorchPropIds);
   const litTorchPropObjects = litTorchPropIds.map((pi) => d.props[pi]).filter(Boolean);
@@ -301,6 +347,13 @@ export function buildDungeonScene(d: Dungeon, opts: BuildOptions): DungeonScene 
   const chandelierMat = new THREE.MeshLambertMaterial({ color: 0x4a3a2a, emissive: 0x2a1a0a });
   const cobwebMat = new THREE.MeshBasicMaterial({ color: 0xccccdd, transparent: true, opacity: 0.25, depthWrite: false });
   const bannerMat = new THREE.MeshLambertMaterial({ color: 0x6a2a2a, emissive: 0x1a0808, side: THREE.DoubleSide });
+  // ---- event materials ----
+  const trapMat = new THREE.MeshLambertMaterial({ color: 0x8a3a3a, emissive: 0x4a1a1a });
+  const teleportMat = new THREE.MeshBasicMaterial({ color: 0xdd44ff, transparent: true, opacity: 0.8, blending: THREE.AdditiveBlending, depthWrite: false });
+  const altarMat = new THREE.MeshLambertMaterial({ color: 0x5a6a8a, emissive: 0x2a3a5a });
+  const merchantMat = new THREE.MeshLambertMaterial({ color: 0x4a6a3a, emissive: 0x1a2a1a });
+  const stairsDownMat = new THREE.MeshLambertMaterial({ color: 0x2a2a30, emissive: 0x0a0a0e });
+  const stairsUpMat = new THREE.MeshLambertMaterial({ color: 0x4a4a50, emissive: 0x1a1a20 });
   const spawnMats = [
     new THREE.MeshBasicMaterial({ color: 0x88ff88, transparent: true, opacity: 0.7 }), // tier 0
     new THREE.MeshBasicMaterial({ color: 0xffcc44, transparent: true, opacity: 0.75 }), // tier 1
@@ -368,37 +421,27 @@ export function buildDungeonScene(d: Dungeon, opts: BuildOptions): DungeonScene 
   floorMesh.frustumCulled = false;
   group.add(floorMesh);
 
-  // ---- WATER / LAVA POOLS (visual feature in select rooms) ----
-  // Some rooms get a translucent liquid pool overlay — water for low-difficulty
-  // rooms, lava for forge theme / high-difficulty rooms. Purely cosmetic.
+  // ---- WATER / LAVA POOLS (shader-based with reflections) ----
+  // Water uses a custom ShaderMaterial with animated waves + fresnel.
+  // Lava uses an additive shader with glowing cracks.
   const waterGeo = new THREE.PlaneGeometry(1, 1);
   waterGeo.rotateX(-Math.PI / 2);
-  const waterMat = new THREE.MeshBasicMaterial({
-    color: 0x2a5a8a, transparent: true, opacity: 0.55,
-    blending: THREE.NormalBlending, depthWrite: false,
-  });
-  const lavaMat = new THREE.MeshBasicMaterial({
-    color: 0xff4a1a, transparent: true, opacity: 0.6,
-    blending: THREE.AdditiveBlending, depthWrite: false,
-  });
-  const waterMeshes: THREE.Mesh[] = [];
+  const waterShaderMat = createWaterMaterial();
+  const lavaShaderMat = createLavaMaterial();
+  const waterMeshes: { mesh: THREE.Mesh; mat: THREE.ShaderMaterial; isLava: boolean }[] = [];
   for (const r of d.rooms) {
-    // ~25% of combat rooms get a pool; boss gets a lava pool in forge theme
     const n2 = valueNoise(r.cx, r.cy, d.params.seed ^ 0x7777);
     const wantPool = (r.type === 'combat' && n2 < 0.25) || r.type === 'boss';
     if (!wantPool) continue;
     const isLava = theme === 'forge' || r.difficulty > 0.8;
-    const mat = isLava ? lavaMat : waterMat;
-    // pool fills the inner area of the room (smaller than the room footprint)
+    const mat = isLava ? lavaShaderMat : waterShaderMat;
     const poolW = Math.max(1, r.w * 0.7);
     const poolH = Math.max(1, r.h * 0.7);
     const mesh = new THREE.Mesh(waterGeo, mat);
     mesh.position.set(worldX(r.cx), 0.03, worldZ(r.cy));
     mesh.scale.set(poolW * 2, 1, poolH * 2);
-    mesh.userData.isLava = isLava;
-    mesh.userData.baseOpacity = mat.opacity;
     group.add(mesh);
-    waterMeshes.push(mesh);
+    waterMeshes.push({ mesh, mat, isLava });
   }
 
   // ---- WALL instanced mesh (height jitter) ----
@@ -630,6 +673,85 @@ export function buildDungeonScene(d: Dungeon, opts: BuildOptions): DungeonScene 
     color: new THREE.Color(0x7a2a2a),
   }));
   if (bannerMesh) group.add(bannerMesh);
+
+  // ---- event props ----
+  const trapMesh = buildPropInstanced(traps, trapGeo(), trapMat, (p) => ({
+    pos: new THREE.Vector3(worldX(p.x), 0, worldZ(p.y)),
+    scale: new THREE.Vector3(1, 1, 1), rotY: 0,
+    color: new THREE.Color(0x8a3a3a),
+  }));
+  if (trapMesh) group.add(trapMesh);
+
+  const teleportMesh = buildPropInstanced(teleports, teleportGeo(), teleportMat, (p) => ({
+    pos: new THREE.Vector3(worldX(p.x), 0, worldZ(p.y)),
+    scale: new THREE.Vector3(1, 1, 1), rotY: 0,
+    color: new THREE.Color(0xdd44ff),
+  }));
+  if (teleportMesh) group.add(teleportMesh);
+
+  const altarMesh = buildPropInstanced(altars, altarGeo(), altarMat, (p) => ({
+    pos: new THREE.Vector3(worldX(p.x), 0, worldZ(p.y)),
+    scale: new THREE.Vector3(1, 1, 1), rotY: 0,
+    color: new THREE.Color(0x5a6a8a),
+  }));
+  if (altarMesh) group.add(altarMesh);
+
+  const merchantMesh = buildPropInstanced(merchants, merchantGeo(), merchantMat, (p) => ({
+    pos: new THREE.Vector3(worldX(p.x), 0, worldZ(p.y)),
+    scale: new THREE.Vector3(1, 1, 1), rotY: 0,
+    color: new THREE.Color(0x4a6a3a),
+  }));
+  if (merchantMesh) group.add(merchantMesh);
+
+  // ---- stairs ----
+  const stairsDownMesh = buildPropInstanced(stairsDown, stairsDownGeo(), stairsDownMat, (p) => ({
+    pos: new THREE.Vector3(worldX(p.x), 0, worldZ(p.y)),
+    scale: new THREE.Vector3(1, 1, 1), rotY: 0,
+    color: new THREE.Color(0x2a2a30),
+  }));
+  if (stairsDownMesh) group.add(stairsDownMesh);
+
+  const stairsUpMesh = buildPropInstanced(stairsUp, stairsUpGeo(), stairsUpMat, (p) => ({
+    pos: new THREE.Vector3(worldX(p.x), 0, worldZ(p.y)),
+    scale: new THREE.Vector3(1, 1, 1), rotY: 0,
+    color: new THREE.Color(0x4a4a50),
+  }));
+  if (stairsUpMesh) group.add(stairsUpMesh);
+
+  // ---- weather system ----
+  let weatherPoints: THREE.Points | null = null;
+  const weatherType = d.params.weather ?? 'none';
+  if (weatherType !== 'none') {
+    const MAX_WD = 300;
+    const wdPos = new Float32Array(MAX_WD * 3);
+    const wdCol = new Float32Array(MAX_WD * 3);
+    const wdVel: Array<{ vx: number; vy: number; vz: number }> = [];
+    for (let i = 0; i < MAX_WD; i++) {
+      wdPos[i * 3] = (Math.random() - 0.5) * Math.max(W, H);
+      wdPos[i * 3 + 1] = Math.random() * 30 + 10;
+      wdPos[i * 3 + 2] = (Math.random() - 0.5) * Math.max(W, H);
+      let col: [number, number, number];
+      if (weatherType === 'rain') { col = [0.5, 0.6, 0.8]; wdVel.push({ vx: 0, vy: -15, vz: 0 }); }
+      else if (weatherType === 'snow') { col = [0.9, 0.9, 1.0]; wdVel.push({ vx: (Math.random()-0.5)*0.5, vy: -2, vz: (Math.random()-0.5)*0.5 }); }
+      else { col = [0.6, 0.4, 0.3]; wdVel.push({ vx: (Math.random()-0.5)*1, vy: -5, vz: (Math.random()-0.5)*1 }); }
+      wdCol[i * 3] = col[0]; wdCol[i * 3 + 1] = col[1]; wdCol[i * 3 + 2] = col[2];
+    }
+    const wdGeo = new THREE.BufferGeometry();
+    wdGeo.setAttribute('position', new THREE.BufferAttribute(wdPos, 3));
+    wdGeo.setAttribute('color', new THREE.BufferAttribute(wdCol, 3));
+    const wdMat = new THREE.PointsMaterial({
+      size: weatherType === 'rain' ? 0.15 : 0.3, vertexColors: true,
+      transparent: true, opacity: 0.7, depthWrite: false, sizeAttenuation: true,
+    });
+    weatherPoints = new THREE.Points(wdGeo, wdMat);
+    weatherPoints.frustumCulled = false;
+    group.add(weatherPoints);
+    // store velocity array for update
+    (weatherPoints as any)._vel = wdVel;
+    (weatherPoints as any)._maxWd = MAX_WD;
+    (weatherPoints as any)._weatherType = weatherType;
+    (weatherPoints as any)._wdPos = wdPos;
+  }
 
   // spawn markers (grouped by tier)
   const spawnGroups: THREE.InstancedMesh[] = [];
@@ -1030,7 +1152,7 @@ export function buildDungeonScene(d: Dungeon, opts: BuildOptions): DungeonScene 
       }
   }
   // store prop base scales for pop animation
-  const propMeshes: THREE.InstancedMesh[] = [pillarMesh, debrisMesh, chestMesh, brazierMesh, bracketMesh, flameMesh, crystalMesh, portalMesh, stalagmiteMesh, bonesMesh, barrelMesh, crateMesh, statueMesh, sarcophagusMesh, mushroomMesh, icecrystalMesh, chandelierMesh, cobwebMesh, bannerMesh, ...spawnGroups].filter(Boolean) as THREE.InstancedMesh[];
+  const propMeshes: THREE.InstancedMesh[] = [pillarMesh, debrisMesh, chestMesh, brazierMesh, bracketMesh, flameMesh, crystalMesh, portalMesh, stalagmiteMesh, bonesMesh, barrelMesh, crateMesh, statueMesh, sarcophagusMesh, mushroomMesh, icecrystalMesh, chandelierMesh, cobwebMesh, bannerMesh, trapMesh, teleportMesh, altarMesh, merchantMesh, stairsDownMesh, stairsUpMesh, ...spawnGroups].filter(Boolean) as THREE.InstancedMesh[];
 
   // store glow base opacity for build-animation ramp
   const glowBaseOpacity = glowMeshes.map((m) => (m.material as THREE.MeshBasicMaterial).opacity);
@@ -1213,22 +1335,30 @@ export function buildDungeonScene(d: Dungeon, opts: BuildOptions): DungeonScene 
       const pulse = 0.3 + 0.25 * Math.sin(elapsedSec * 5);
       (hoverRing.material as THREE.MeshBasicMaterial).opacity = pulse * ramp;
     }
-    // water/lava pool shimmer — gentle opacity + position ripple + hue shift
-    for (let wi2 = 0; wi2 < waterMeshes.length; wi2++) {
-      const wm = waterMeshes[wi2];
-      const base = wm.userData.baseOpacity as number;
-      const isLava = wm.userData.isLava as boolean;
-      const ripple = isLava
-        ? 0.7 + 0.3 * Math.sin(elapsedSec * 2 + wi2) // lava churns faster
-        : 0.85 + 0.15 * Math.sin(elapsedSec * 0.8 + wi2 * 1.3); // water gentle
-      (wm.material as THREE.MeshBasicMaterial).opacity = base * ripple * ramp;
-      // subtle vertical bob to simulate surface tension
-      wm.position.y = 0.03 + 0.01 * Math.sin(elapsedSec * 1.5 + wi2 * 2);
-      // water gets a subtle color shimmer (reflective look); lava stays red
-      if (!isLava) {
-        const shimmer = 0.9 + 0.1 * Math.sin(elapsedSec * 1.2 + wi2);
-        (wm.material as THREE.MeshBasicMaterial).color.setRGB(0.16 * shimmer, 0.35 * shimmer, 0.55 * shimmer);
+    // water/lava shader update — pass time uniform
+    for (const wm of waterMeshes) {
+      wm.mat.uniforms.uTime.value = elapsedSec;
+      wm.mat.uniforms.uOpacity.value = (wm.isLava ? 0.75 : 0.7) * ramp;
+    }
+    // ---- weather particle update ----
+    if (weatherPoints) {
+      const wdPos = (weatherPoints as any)._wdPos as Float32Array;
+      const wdVel = (weatherPoints as any)._vel as Array<{ vx: number; vy: number; vz: number }>;
+      const maxWd = (weatherPoints as any)._maxWd as number;
+      const wt = (weatherPoints as any)._weatherType as string;
+      const spread = Math.max(W, H);
+      for (let i = 0; i < maxWd; i++) {
+        wdPos[i * 3] += wdVel[i].vx * dt;
+        wdPos[i * 3 + 1] += wdVel[i].vy * dt;
+        wdPos[i * 3 + 2] += wdVel[i].vz * dt;
+        // recycle when below ground
+        if (wdPos[i * 3 + 1] < 0) {
+          wdPos[i * 3] = (Math.random() - 0.5) * spread;
+          wdPos[i * 3 + 1] = 25 + Math.random() * 10;
+          wdPos[i * 3 + 2] = (Math.random() - 0.5) * spread;
+        }
       }
+      weatherPoints.geometry.attributes.position.needsUpdate = true;
     }
   }
 
