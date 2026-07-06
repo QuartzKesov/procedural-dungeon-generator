@@ -1904,8 +1904,8 @@ function RoomInspector({ room, dungeon, onClose, onFocus }: {
   onFocus: () => void;
 }) {
   const typeColor = ROOM_TYPE_COLOR[room.type] ?? '#9a8a78';
-  const spawnsInRoom = activeDungeon.spawns.filter((s) => s.roomId === room.id);
-  const propsInRoom = activeDungeon.props.filter((p) => p.roomId === room.id);
+  const spawnsInRoom = dungeon.spawns.filter((s) => s.roomId === room.id);
+  const propsInRoom = dungeon.props.filter((p) => p.roomId === room.id);
   const isBoss = room.type === 'boss';
   const isEntrance = room.type === 'entrance';
   return (
