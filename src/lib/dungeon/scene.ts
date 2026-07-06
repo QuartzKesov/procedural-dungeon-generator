@@ -178,6 +178,24 @@ function icecrystalGeo(): THREE.BufferGeometry {
   g.translate(0, 0.5, 0);
   return g;
 }
+function chandelierGeo(): THREE.BufferGeometry {
+  // a hanging chandelier — ring + chain (simplified as a torus + thin cylinder)
+  const ring = new THREE.TorusGeometry(0.5, 0.05, 6, 12);
+  ring.rotateX(Math.PI / 2);
+  ring.translate(0, 2.2, 0);
+  const chain = new THREE.CylinderGeometry(0.02, 0.02, 0.6, 4);
+  chain.translate(0, 2.6, 0);
+  // merge
+  const merged = new THREE.BufferGeometry();
+  const ringPos = ring.attributes.position.array;
+  const chainPos = chain.attributes.position.array;
+  const combined = new Float32Array(ringPos.length + chainPos.length);
+  combined.set(ringPos, 0);
+  combined.set(chainPos, ringPos.length);
+  merged.setAttribute('position', new THREE.BufferAttribute(combined, 3));
+  merged.computeVertexNormals();
+  return merged;
+}
 
 // ---- The scene handle ----------------------------------------------------
 export interface DungeonScene {
@@ -242,6 +260,7 @@ export function buildDungeonScene(d: Dungeon, opts: BuildOptions): DungeonScene 
   const sarcophagi = d.props.filter((p) => p.kind === 'sarcophagus');
   const mushrooms = d.props.filter((p) => p.kind === 'mushroom');
   const icecrystals = d.props.filter((p) => p.kind === 'icecrystal');
+  const chandeliers = d.props.filter((p) => p.kind === 'chandelier');
   const litTorchPropIds: number[] = (d as any).litTorchPropIds ?? [];
   const litTorchSet = new Set(litTorchPropIds);
   const litTorchPropObjects = litTorchPropIds.map((pi) => d.props[pi]).filter(Boolean);
@@ -265,6 +284,7 @@ export function buildDungeonScene(d: Dungeon, opts: BuildOptions): DungeonScene 
   const sarcophagusMat = new THREE.MeshLambertMaterial({ color: 0x6a6a72, emissive: 0x15151a });
   const mushroomMat = new THREE.MeshLambertMaterial({ color: 0x8a4a6a, emissive: 0x2a0a1a });
   const icecrystalMat = new THREE.MeshBasicMaterial({ color: 0xaaddff, transparent: true, opacity: 0.75, blending: THREE.AdditiveBlending, depthWrite: false });
+  const chandelierMat = new THREE.MeshLambertMaterial({ color: 0x4a3a2a, emissive: 0x2a1a0a });
   const spawnMats = [
     new THREE.MeshBasicMaterial({ color: 0x88ff88, transparent: true, opacity: 0.7 }), // tier 0
     new THREE.MeshBasicMaterial({ color: 0xffcc44, transparent: true, opacity: 0.75 }), // tier 1
@@ -559,6 +579,23 @@ export function buildDungeonScene(d: Dungeon, opts: BuildOptions): DungeonScene 
     color: new THREE.Color(0xaaddff),
   }));
   if (icecrystalMesh) group.add(icecrystalMesh);
+
+  // chandeliers (hanging light fixtures in large rooms)
+  const chandelierMesh = buildPropInstanced(chandeliers, chandelierGeo(), chandelierMat, (p) => ({
+    pos: new THREE.Vector3(worldX(p.x), 0, worldZ(p.y)),
+    scale: new THREE.Vector3(1, 1, 1),
+    rotY: 0,
+    color: new THREE.Color(0x5a4a3a),
+  }));
+  if (chandelierMesh) group.add(chandelierMesh);
+  // chandeliers get their own warm point lights (separate from torch budget)
+  const chandelierLights: THREE.PointLight[] = [];
+  for (const c of chandeliers) {
+    const light = new THREE.PointLight(0xffb060, 2.5, 8, 2.0);
+    light.position.set(worldX(c.x), 2.2, worldZ(c.y));
+    group.add(light);
+    chandelierLights.push(light);
+  }
 
   // spawn markers (grouped by tier)
   const spawnGroups: THREE.InstancedMesh[] = [];
@@ -959,7 +996,7 @@ export function buildDungeonScene(d: Dungeon, opts: BuildOptions): DungeonScene 
       }
   }
   // store prop base scales for pop animation
-  const propMeshes: THREE.InstancedMesh[] = [pillarMesh, debrisMesh, chestMesh, brazierMesh, bracketMesh, flameMesh, crystalMesh, portalMesh, stalagmiteMesh, bonesMesh, barrelMesh, crateMesh, statueMesh, sarcophagusMesh, mushroomMesh, icecrystalMesh, ...spawnGroups].filter(Boolean) as THREE.InstancedMesh[];
+  const propMeshes: THREE.InstancedMesh[] = [pillarMesh, debrisMesh, chestMesh, brazierMesh, bracketMesh, flameMesh, crystalMesh, portalMesh, stalagmiteMesh, bonesMesh, barrelMesh, crateMesh, statueMesh, sarcophagusMesh, mushroomMesh, icecrystalMesh, chandelierMesh, ...spawnGroups].filter(Boolean) as THREE.InstancedMesh[];
 
   // store glow base opacity for build-animation ramp
   const glowBaseOpacity = glowMeshes.map((m) => (m.material as THREE.MeshBasicMaterial).opacity);
@@ -1020,6 +1057,10 @@ export function buildDungeonScene(d: Dungeon, opts: BuildOptions): DungeonScene 
     // lights ramp
     const lightT = p < 0.82 ? 0.15 : p < 1.0 ? 0.15 + 0.85 * ((p - 0.82) / 0.18) : 1;
     for (const fl of flickerLights) fl.light.intensity = fl.base * lightT;
+    // chandelier lights ramp too
+    for (let ci = 0; ci < chandelierLights.length; ci++) {
+      chandelierLights[ci].intensity = 2.5 * lightT;
+    }
     // glow ramp (follows lights)
     for (let gi = 0; gi < glowMeshes.length; gi++) {
       (glowMeshes[gi].material as THREE.MeshBasicMaterial).opacity = glowBaseOpacity[gi] * lightT;
@@ -1039,6 +1080,12 @@ export function buildDungeonScene(d: Dungeon, opts: BuildOptions): DungeonScene 
         0.08 * Math.sin(t * 2.7 + 1.3) +
         0.05 * Math.sin(t * 5.1 + 0.6);
       fl.light.intensity = fl.base * flicker * ramp;
+    }
+    // chandelier lights — gentle flicker (steady candle glow)
+    for (let ci = 0; ci < chandelierLights.length; ci++) {
+      const t = elapsedSec * 4 + ci * 0.7;
+      const flicker = 0.88 + 0.08 * Math.sin(t) + 0.04 * Math.sin(t * 2.3 + 1);
+      chandelierLights[ci].intensity = 2.5 * flicker * ramp;
     }
     // flame scale jitter
     if (flameMesh) {

@@ -21,7 +21,7 @@ import {
   Dices, Play, RefreshCw, FlaskConical, Eye, EyeOff, Map as MapIcon, Layers, Zap,
   Link2, Volume2, VolumeX, Crosshair, Skull, DoorOpen, Sparkles,
   Save, Bookmark, Trash2, Download, RotateCw, Route,
-  Sun, Moon, History, X, Info,
+  Sun, Moon, History, X, Info, List,
 } from 'lucide-react';
 
 interface ThreeState {
@@ -72,6 +72,8 @@ export function DungeonViewer() {
   const [hoveredScreen, setHoveredScreen] = useState<{ x: number; y: number } | null>(null);
   const [dayMode, setDayMode] = useState(false);
   const [seedHistory, setSeedHistory] = useState<number[]>([]);
+  const [showRoomList, setShowRoomList] = useState(false);
+  const [roomListFilter, setRoomListFilter] = useState<string>('all');
 
   // Generate the dungeon whenever params change. Fast (~25ms) → synchronous.
   const dungeon = useMemo<Dungeon>(() => generateDungeon(params), [params]);
@@ -1061,6 +1063,64 @@ export function DungeonViewer() {
 
               <Separator className="bg-amber-900/30" />
 
+              {/* Room list — filterable, click to focus */}
+              <div className="space-y-2">
+                <button
+                  onClick={() => setShowRoomList((v) => !v)}
+                  className="flex w-full items-center justify-between rounded-lg border border-amber-900/30 bg-amber-950/10 px-3 py-1.5 text-xs text-amber-200/70 transition-colors hover:bg-amber-900/20"
+                >
+                  <span className="flex items-center gap-1.5"><List className="h-3.5 w-3.5" /> Room List</span>
+                  <span className="font-mono text-[10px] text-amber-300/50">{dungeon.rooms.length} rooms</span>
+                </button>
+                {showRoomList && (
+                  <div className="space-y-2 rounded-lg border border-amber-900/30 bg-black/40 p-2">
+                    {/* filter buttons */}
+                    <div className="flex flex-wrap gap-1">
+                      {['all', 'entrance', 'boss', 'treasure', 'shrine', 'elite', 'combat'].map((t) => (
+                        <button
+                          key={t}
+                          onClick={() => setRoomListFilter(t)}
+                          className={`rounded px-1.5 py-0.5 text-[9px] capitalize transition-colors ${roomListFilter === t ? 'bg-amber-800/50 text-amber-100' : 'bg-amber-950/30 text-amber-300/50 hover:bg-amber-900/30'}`}
+                        >
+                          {t}
+                        </button>
+                      ))}
+                    </div>
+                    {/* room list — scrollable */}
+                    <div className="max-h-48 space-y-0.5 overflow-y-auto">
+                      {dungeon.rooms
+                        .filter((r) => roomListFilter === 'all' || r.type === roomListFilter)
+                        .sort((a, b) => a.depth - b.depth)
+                        .map((r) => {
+                          const color = ROOM_TYPE_COLOR[r.type] ?? '#9a8a78';
+                          return (
+                            <button
+                              key={r.id}
+                              onClick={() => {
+                                setSelectedRoom(r.id);
+                                focusOnCellRef.current?.(r.cx, r.cy);
+                              }}
+                              onMouseEnter={() => setHoveredRoom(r.id)}
+                              onMouseLeave={() => setHoveredRoom(-1)}
+                              className={`flex w-full items-center gap-2 rounded border px-2 py-1 text-left transition-colors ${selectedRoom === r.id ? 'border-amber-500/50 bg-amber-900/30' : 'border-amber-900/20 bg-amber-950/10 hover:bg-amber-900/20'}`}
+                            >
+                              <span className="inline-block h-2 w-2 shrink-0 rounded-full" style={{ background: color }} />
+                              <span className="w-14 shrink-0 text-[10px] capitalize text-amber-100/70">{r.type}</span>
+                              <span className="shrink-0 font-mono text-[9px] text-amber-300/40">#{r.id}</span>
+                              <span className="ml-auto flex items-center gap-1.5">
+                                <span className="font-mono text-[9px] text-amber-200/40">d{r.depth}</span>
+                                <span className="font-mono text-[9px]" style={{ color }}>{(r.difficulty * 100).toFixed(0)}%</span>
+                              </span>
+                            </button>
+                          );
+                        })}
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              <Separator className="bg-amber-900/30" />
+
               <PanelTitle icon={<FlaskConical className="h-4 w-4 text-amber-500" />} title="Acceptance Tests" />
               <div className={`mb-2 flex items-center gap-2 rounded-lg border px-3 py-1.5 text-xs font-medium ${allTestsPass ? 'border-emerald-700/40 bg-emerald-950/20 text-emerald-300' : 'border-red-700/40 bg-red-950/20 text-red-300'}`}>
                 {allTestsPass ? <Eye className="h-3.5 w-3.5" /> : <EyeOff className="h-3.5 w-3.5" />}
@@ -1434,7 +1494,7 @@ function parseHashParams(): Params {
       else if (k === 'rooms') p.roomCount = Math.max(8, Math.min(80, parseInt(v, 10) || DEFAULT_PARAMS.roomCount));
       else if (k === 'loops') p.loopChance = Math.max(0, Math.min(0.5, parseFloat(v) || DEFAULT_PARAMS.loopChance));
       else if (k === 'decor') p.decorDensity = Math.max(0, Math.min(1, parseFloat(v) || DEFAULT_PARAMS.decorDensity));
-      else if (k === 'theme' && ['crypt', 'cavern', 'catacomb', 'forge'].includes(v)) p.theme = v as Theme;
+      else if (k === 'theme' && ['crypt', 'cavern', 'catacomb', 'forge', 'ice', 'jungle'].includes(v)) p.theme = v as Theme;
     }
   } catch { /* ignore */ }
   return p;

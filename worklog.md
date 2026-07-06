@@ -250,3 +250,25 @@ Stage Summary:
 - VLM assessment: 9/10 — "clean and functional, clear 3D visualization, organized panels"
 - Clean lint, dev server stable on port 3000
 - Next round: could add saved layouts gallery, more prop variety, water reflection shader, room list panel
+
+---
+Task ID: cron-review-8
+Agent: main (webDevReview cron)
+Task: Periodic QA + bug fix + add new features (room list panel, chandeliers, theme parsing fix)
+
+Work Log:
+- QA baseline: 6/6 tests pass, 9.6ms perf, lint clean, dev server stable
+- Bug fix: parseHashParams was missing 'ice' and 'jungle' themes from the allowed list — loading a URL with theme=ice or theme=jungle would silently fall back to crypt. Fixed by adding 'ice' and 'jungle' to the theme whitelist.
+- Enhancement: room list/overview panel — a collapsible panel in the right sidebar showing all rooms sorted by depth, with filter buttons (all/entrance/boss/treasure/shrine/elite/combat). Each room row shows: type dot, type label, room id, depth, difficulty %. Clicking a room selects it (opens inspector) and focuses the camera on it. Hovering a room row sets the hover highlight ring. Verified: 42 rooms listed, clicking boss room opens inspector + focuses camera.
+- Enhancement: chandelier prop — hanging light fixture (merged TorusGeometry ring + CylinderGeometry chain) placed at the center of every large room (7×7+). Each chandelier gets its own warm PointLight (0xffb060, distance 8, decay 2) with gentle flicker (0.88+0.08·sin(4t)+0.04·sin(2.3t)). Lights ramp with build animation. Verified: 8 chandeliers in 8 large rooms.
+- Styling: room list uses filter pills, scrollable list (max-h-48), color-coded type dots, selected room highlighted with amber border. Chandelier material has warm emissive (0x2a1a0a).
+- All acceptance tests pass for seeds {1,7,42,1337,99999,123456} and all 6 themes. 60-room gen 19.7ms.
+
+Stage Summary:
+- ALL 6 acceptance tests pass across all tested seeds, room counts, and all 6 themes
+- 60-room generation: 19.7ms (best of 3), well under 50ms budget
+- Bug fix: parseHashParams now accepts ice/jungle themes (was silently falling back to crypt)
+- New features: room list/overview panel (filterable, click-to-focus, hover-highlighted), chandeliers (hanging lights with warm point lights in large rooms)
+- VLM assessment: 9/10 — "well-structured, functional, visually cohesive, room list with filter buttons and clickable items"
+- Clean lint, dev server stable on port 3000
+- Next round: could add saved layouts gallery, more prop variety, water reflection shader, minimap zoom

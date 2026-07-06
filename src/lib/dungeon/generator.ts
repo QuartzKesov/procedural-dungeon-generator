@@ -807,6 +807,14 @@ function decorate(rng: RNG, dungeon: Dungeon & {
     }
   }
 
+  // ---- Chandeliers (large rooms, hanging light fixtures) ----
+  for (const rm of rooms) {
+    if (rm.w * rm.h < 49) continue; // only large rooms (7×7+)
+    if (rm.type === 'entrance') continue;
+    // place a chandelier at the room center (doesn't block floor — it's overhead)
+    props.push({ kind: 'chandelier', x: rm.cx, y: rm.cy, rot: 0, scale: 1, roomId: rm.id, flickerPhase: rng.range(0, Math.PI * 2) });
+  }
+
   // ---- Braziers ringing the boss arena ----
   const boss = rooms[bossId];
   {
