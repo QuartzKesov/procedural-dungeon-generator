@@ -397,25 +397,23 @@ export function DungeonViewer() {
         const rect = renderer.domElement.getBoundingClientRect();
         const ndcX = ((e.clientX - rect.left) / rect.width) * 2 - 1;
         const ndcY = -((e.clientY - rect.top) / rect.height) * 2 + 1;
-        // In edit mode: dispatch edit-click with grid coords
+        // In edit mode: always use raw raycast (pickRoom only works on floor cells)
         if (editorStateRef.current?.enabled) {
-          // raycast to ground plane for grid coords
-          const hit2 = ds.pickRoom(ndcX, ndcY, camera);
-          if (hit2) {
-            window.dispatchEvent(new CustomEvent('dungeon-edit-click', { detail: { gridX: hit2.gridX, gridY: hit2.gridY } }));
-          } else {
-            // pickRoom returns null for non-floor cells; do a raw raycast
-            const raycaster2 = new THREE.Raycaster();
-            const groundPlane2 = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
-            const hit3 = new THREE.Vector3();
-            raycaster2.setFromCamera(new THREE.Vector2(ndcX, ndcY), camera);
-            if (raycaster2.ray.intersectPlane(groundPlane2, hit3)) {
-              const gx = Math.round(hit3.x + (currentDungeon.W - 1) / 2);
-              const gy = Math.round(hit3.z + (currentDungeon.H - 1) / 2);
+          const raycaster2 = new THREE.Raycaster();
+          const groundPlane2 = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
+          const hit3 = new THREE.Vector3();
+          raycaster2.setFromCamera(new THREE.Vector2(ndcX, ndcY), camera);
+          if (raycaster2.ray.intersectPlane(groundPlane2, hit3)) {
+            // Use currentDungeon which is kept in sync via setCurrentDungeon
+            const cx2 = (currentDungeon.W - 1) / 2;
+            const cz2 = (currentDungeon.H - 1) / 2;
+            const gx = Math.round(hit3.x + cx2);
+            const gy = Math.round(hit3.z + cz2);
+            if (gx >= 0 && gy >= 0 && gx < currentDungeon.W && gy < currentDungeon.H) {
               window.dispatchEvent(new CustomEvent('dungeon-edit-click', { detail: { gridX: gx, gridY: gy } }));
             }
           }
-          return; // don't do room picking in edit mode
+          return;
         }
         // Normal mode: pick room
         const hit = ds.pickRoom(ndcX, ndcY, camera);

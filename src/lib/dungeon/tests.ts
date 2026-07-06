@@ -91,14 +91,18 @@ function placement(d: Dungeon): { pass: boolean; detail: string } {
     if (d.grid[i] !== FLOOR) { bad++; return; }
     if (doorSet.has(i)) { bad++; return; }
   };
-  for (const p of d.props) checkCell(p.x, p.y);
+  for (const p of d.props) {
+    // doors ARE on doorway cells by design — skip them
+    if (p.kind === 'door') continue;
+    checkCell(p.x, p.y);
+  }
   for (const s of d.spawns) checkCell(s.x, s.y);
   for (const e of d.events) checkCell(e.x, e.y);
   // torches/braziers/cobwebs/banners legitimately sit ON wall cells — re-allow wall for those.
   // Count those back out:
   let wallOk = 0;
   for (const p of d.props) {
-    if ((p.kind === 'torch' || p.kind === 'brazier' || p.kind === 'cobweb' || p.kind === 'banner') && p.x >= 0 && p.y >= 0 && p.x < d.W && p.y < d.H) {
+    if ((p.kind === 'torch' || p.kind === 'brazier' || p.kind === 'cobweb' || p.kind === 'banner' || p.kind === 'door') && p.x >= 0 && p.y >= 0 && p.x < d.W && p.y < d.H) {
       if (d.grid[p.y * d.W + p.x] === WALL) wallOk++;
     }
   }

@@ -100,6 +100,14 @@ export type PropKind =
   | 'teleport'
   | 'altar'
   | 'merchant'
+  // ---- furniture/decor ----
+  | 'table'
+  | 'chair'
+  | 'bookshelf'
+  | 'candle'
+  | 'rug'
+  | 'pot'
+  | 'door'
   // ---- multi-level ----
   | 'stairs_down'
   | 'stairs_up';

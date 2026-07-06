@@ -241,9 +241,44 @@ function stairsDownGeo(): THREE.BufferGeometry {
   return g;
 }
 function stairsUpGeo(): THREE.BufferGeometry {
-  // stairs going up — ascending steps
   const g = new THREE.BoxGeometry(0.9, 0.3, 0.9);
   g.translate(0, 0.15, 0);
+  return g;
+}
+function doorGeo(): THREE.BufferGeometry {
+  const g = new THREE.BoxGeometry(0.9, 1.6, 0.1);
+  g.translate(0, 0.8, 0);
+  return g;
+}
+function tableGeo(): THREE.BufferGeometry {
+  const g = new THREE.BoxGeometry(0.8, 0.1, 0.5);
+  g.translate(0, 0.7, 0);
+  return g;
+}
+function chairGeo(): THREE.BufferGeometry {
+  const g = new THREE.BoxGeometry(0.35, 0.4, 0.35);
+  g.translate(0, 0.2, 0);
+  return g;
+}
+function bookshelfGeo(): THREE.BufferGeometry {
+  const g = new THREE.BoxGeometry(0.3, 1.8, 0.8);
+  g.translate(0, 0.9, 0);
+  return g;
+}
+function candleGeo(): THREE.BufferGeometry {
+  const g = new THREE.CylinderGeometry(0.05, 0.06, 0.25, 6);
+  g.translate(0, 0.125, 0);
+  return g;
+}
+function rugGeo(): THREE.BufferGeometry {
+  const g = new THREE.PlaneGeometry(1.5, 1.0);
+  g.rotateX(-Math.PI / 2);
+  g.translate(0, 0.02, 0);
+  return g;
+}
+function potGeo(): THREE.BufferGeometry {
+  const g = new THREE.CylinderGeometry(0.2, 0.28, 0.4, 8);
+  g.translate(0, 0.2, 0);
   return g;
 }
 
@@ -321,6 +356,14 @@ export function buildDungeonScene(d: Dungeon, opts: BuildOptions): DungeonScene 
   // ---- stairs props ----
   const stairsDown = d.props.filter((p) => p.kind === 'stairs_down');
   const stairsUp = d.props.filter((p) => p.kind === 'stairs_up');
+  // ---- furniture props ----
+  const doors = d.props.filter((p) => p.kind === 'door');
+  const tables = d.props.filter((p) => p.kind === 'table');
+  const chairs = d.props.filter((p) => p.kind === 'chair');
+  const bookshelves = d.props.filter((p) => p.kind === 'bookshelf');
+  const candles = d.props.filter((p) => p.kind === 'candle');
+  const rugs = d.props.filter((p) => p.kind === 'rug');
+  const pots = d.props.filter((p) => p.kind === 'pot');
   const litTorchPropIds: number[] = (d as any).litTorchPropIds ?? [];
   const litTorchSet = new Set(litTorchPropIds);
   const litTorchPropObjects = litTorchPropIds.map((pi) => d.props[pi]).filter(Boolean);
@@ -354,6 +397,14 @@ export function buildDungeonScene(d: Dungeon, opts: BuildOptions): DungeonScene 
   const merchantMat = new THREE.MeshLambertMaterial({ color: 0x4a6a3a, emissive: 0x1a2a1a });
   const stairsDownMat = new THREE.MeshLambertMaterial({ color: 0x2a2a30, emissive: 0x0a0a0e });
   const stairsUpMat = new THREE.MeshLambertMaterial({ color: 0x4a4a50, emissive: 0x1a1a20 });
+  // ---- furniture materials ----
+  const doorMat = new THREE.MeshLambertMaterial({ color: 0x5a3a1a, emissive: 0x1a0a00 });
+  const tableMat = new THREE.MeshLambertMaterial({ color: 0x6a4a2a });
+  const chairMat = new THREE.MeshLambertMaterial({ color: 0x5a3a1a });
+  const bookshelfMat = new THREE.MeshLambertMaterial({ color: 0x4a3018, emissive: 0x100800 });
+  const candleMat = new THREE.MeshLambertMaterial({ color: 0xddddaa, emissive: 0x2a2000 });
+  const rugMat = new THREE.MeshLambertMaterial({ color: 0x6a2a3a, transparent: true, opacity: 0.7, side: THREE.DoubleSide });
+  const potMat = new THREE.MeshLambertMaterial({ color: 0x8a6a4a });
   const spawnMats = [
     new THREE.MeshBasicMaterial({ color: 0x88ff88, transparent: true, opacity: 0.7 }), // tier 0
     new THREE.MeshBasicMaterial({ color: 0xffcc44, transparent: true, opacity: 0.75 }), // tier 1
@@ -717,6 +768,64 @@ export function buildDungeonScene(d: Dungeon, opts: BuildOptions): DungeonScene 
     color: new THREE.Color(0x4a4a50),
   }));
   if (stairsUpMesh) group.add(stairsUpMesh);
+
+  // ---- furniture props ----
+  const doorMesh = buildPropInstanced(doors, doorGeo(), doorMat, (p) => ({
+    pos: new THREE.Vector3(worldX(p.x), 0, worldZ(p.y)),
+    scale: new THREE.Vector3(1, 1, 1), rotY: p.rot,
+    color: new THREE.Color(0x5a3a1a),
+  }));
+  if (doorMesh) group.add(doorMesh);
+
+  const tableMesh = buildPropInstanced(tables, tableGeo(), tableMat, (p) => ({
+    pos: new THREE.Vector3(worldX(p.x), 0, worldZ(p.y)),
+    scale: new THREE.Vector3(1, 1, 1), rotY: p.rot,
+    color: new THREE.Color(0x6a4a2a),
+  }));
+  if (tableMesh) group.add(tableMesh);
+
+  const chairMesh = buildPropInstanced(chairs, chairGeo(), chairMat, (p) => ({
+    pos: new THREE.Vector3(worldX(p.x), 0, worldZ(p.y)),
+    scale: new THREE.Vector3(1, 1, 1), rotY: p.rot,
+    color: new THREE.Color(0x5a3a1a),
+  }));
+  if (chairMesh) group.add(chairMesh);
+
+  const bookshelfMesh = buildPropInstanced(bookshelves, bookshelfGeo(), bookshelfMat, (p) => ({
+    pos: new THREE.Vector3(worldX(p.x), 0, worldZ(p.y)),
+    scale: new THREE.Vector3(1, 1, 1), rotY: p.rot,
+    color: new THREE.Color(0x4a3018),
+  }));
+  if (bookshelfMesh) group.add(bookshelfMesh);
+
+  const candleMesh = buildPropInstanced(candles, candleGeo(), candleMat, (p) => ({
+    pos: new THREE.Vector3(worldX(p.x), 0, worldZ(p.y)),
+    scale: new THREE.Vector3(1, 1, 1), rotY: 0,
+    color: new THREE.Color(0xddddaa),
+  }));
+  if (candleMesh) group.add(candleMesh);
+  // candle lights
+  const candleLights: THREE.PointLight[] = [];
+  for (const c of candles) {
+    const light = new THREE.PointLight(0xffcc60, 1.2, 5, 2.0);
+    light.position.set(worldX(c.x), 0.5, worldZ(c.y));
+    group.add(light);
+    candleLights.push(light);
+  }
+
+  const rugMesh = buildPropInstanced(rugs, rugGeo(), rugMat, (p) => ({
+    pos: new THREE.Vector3(worldX(p.x), 0, worldZ(p.y)),
+    scale: new THREE.Vector3(1, 1, 1), rotY: p.rot,
+    color: new THREE.Color(0x6a2a3a),
+  }));
+  if (rugMesh) group.add(rugMesh);
+
+  const potMesh = buildPropInstanced(pots, potGeo(), potMat, (p) => ({
+    pos: new THREE.Vector3(worldX(p.x), 0, worldZ(p.y)),
+    scale: new THREE.Vector3(p.scale, p.scale, p.scale), rotY: p.rot,
+    color: new THREE.Color(0x8a6a4a),
+  }));
+  if (potMesh) group.add(potMesh);
 
   // ---- weather system ----
   let weatherPoints: THREE.Points | null = null;
@@ -1153,7 +1262,7 @@ export function buildDungeonScene(d: Dungeon, opts: BuildOptions): DungeonScene 
       }
   }
   // store prop base scales for pop animation
-  const propMeshes: THREE.InstancedMesh[] = [pillarMesh, debrisMesh, chestMesh, brazierMesh, bracketMesh, flameMesh, crystalMesh, portalMesh, stalagmiteMesh, bonesMesh, barrelMesh, crateMesh, statueMesh, sarcophagusMesh, mushroomMesh, icecrystalMesh, chandelierMesh, cobwebMesh, bannerMesh, trapMesh, teleportMesh, altarMesh, merchantMesh, stairsDownMesh, stairsUpMesh, ...spawnGroups].filter(Boolean) as THREE.InstancedMesh[];
+  const propMeshes: THREE.InstancedMesh[] = [pillarMesh, debrisMesh, chestMesh, brazierMesh, bracketMesh, flameMesh, crystalMesh, portalMesh, stalagmiteMesh, bonesMesh, barrelMesh, crateMesh, statueMesh, sarcophagusMesh, mushroomMesh, icecrystalMesh, chandelierMesh, cobwebMesh, bannerMesh, trapMesh, teleportMesh, altarMesh, merchantMesh, stairsDownMesh, stairsUpMesh, doorMesh, tableMesh, chairMesh, bookshelfMesh, candleMesh, rugMesh, potMesh, ...spawnGroups].filter(Boolean) as THREE.InstancedMesh[];
 
   // store glow base opacity for build-animation ramp
   const glowBaseOpacity = glowMeshes.map((m) => (m.material as THREE.MeshBasicMaterial).opacity);
@@ -1243,6 +1352,12 @@ export function buildDungeonScene(d: Dungeon, opts: BuildOptions): DungeonScene 
       const t = elapsedSec * 4 + ci * 0.7;
       const flicker = 0.88 + 0.08 * Math.sin(t) + 0.04 * Math.sin(t * 2.3 + 1);
       chandelierLights[ci].intensity = 2.5 * flicker * ramp;
+    }
+    // candle lights — warm flicker
+    for (let ci = 0; ci < candleLights.length; ci++) {
+      const t = elapsedSec * 8 + ci * 1.3;
+      const flicker = 0.8 + 0.15 * Math.sin(t) + 0.05 * Math.sin(t * 3.1 + 0.5);
+      candleLights[ci].intensity = 1.2 * flicker * ramp;
     }
     // flame scale jitter
     if (flameMesh) {

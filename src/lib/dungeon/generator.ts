@@ -947,6 +947,81 @@ function decorate(rng: RNG, dungeon: Dungeon & {
     }
   }
 
+  // ---- Doors at doorway cells ----
+  for (const door of dungeon.doorways) {
+    props.push({ kind: 'door', x: door.x, y: door.y, rot: 0, scale: 1, roomId: -1, flickerPhase: 0 });
+  }
+
+  // ---- Furniture: tables, chairs, bookshelves, candles, rugs, pots ----
+  for (const rm of rooms) {
+    if (rm.type === 'entrance' || rm.type === 'boss') continue;
+    const avail = roomCells[rm.id].filter((c) => !blocked[c.y * W + c.x]);
+    if (avail.length < 3) continue;
+
+    // Bookshelves along walls in large rooms
+    if (rm.w * rm.h >= 30 && rng.chance(0.4)) {
+      const edgeCells = avail.filter((c) => {
+        for (const [dx, dy] of [[1,0],[-1,0],[0,1],[0,-1]]) {
+          const nx = c.x + dx, ny = c.y + dy;
+          if (nx < 0 || ny < 0 || nx >= W || ny >= H) continue;
+          if (grid[ny * W + nx] === WALL) return true;
+        }
+        return false;
+      });
+      if (edgeCells.length > 0) {
+        const c = edgeCells[rng.int(0, edgeCells.length - 1)];
+        props.push({ kind: 'bookshelf', x: c.x, y: c.y, rot: 0, scale: 1, roomId: rm.id, flickerPhase: 0 });
+        blocked[c.y * W + c.x] = 1;
+      }
+    }
+
+    // Tables with chairs in combat rooms
+    if (rm.type === 'combat' && rng.chance(0.25)) {
+      const c = avail[rng.int(0, avail.length - 1)];
+      if (!blocked[c.y * W + c.x]) {
+        props.push({ kind: 'table', x: c.x, y: c.y, rot: rng.pick([0, Math.PI / 2]), scale: 1, roomId: rm.id, flickerPhase: 0 });
+        blocked[c.y * W + c.x] = 1;
+        // chair next to table
+        for (const [dx, dy] of [[1,0],[-1,0],[0,1],[0,-1]]) {
+          const nx = c.x + dx, ny = c.y + dy;
+          if (nx < 0 || ny < 0 || nx >= W || ny >= H) continue;
+          if (grid[ny * W + nx] === FLOOR && !blocked[ny * W + nx]) {
+            props.push({ kind: 'chair', x: nx, y: ny, rot: Math.atan2(-dy, -dx), scale: 1, roomId: rm.id, flickerPhase: 0 });
+            blocked[ny * W + nx] = 1;
+            break;
+          }
+        }
+      }
+    }
+
+    // Candles on random floor cells
+    if (rng.chance(0.3)) {
+      const c = avail[rng.int(0, avail.length - 1)];
+      if (!blocked[c.y * W + c.x]) {
+        props.push({ kind: 'candle', x: c.x, y: c.y, rot: 0, scale: 1, roomId: rm.id, flickerPhase: rng.range(0, Math.PI * 2) });
+        blocked[c.y * W + c.x] = 1;
+      }
+    }
+
+    // Broken pots
+    if (rng.chance(0.2)) {
+      const c = avail[rng.int(0, avail.length - 1)];
+      if (!blocked[c.y * W + c.x]) {
+        props.push({ kind: 'pot', x: c.x, y: c.y, rot: rng.range(0, Math.PI * 2), scale: rng.range(0.7, 1.2), roomId: rm.id, flickerPhase: 0 });
+        blocked[c.y * W + c.x] = 1;
+      }
+    }
+
+    // Rugs in larger rooms
+    if (rm.w * rm.h >= 25 && rng.chance(0.15)) {
+      const c = avail[rng.int(0, avail.length - 1)];
+      if (!blocked[c.y * W + c.x]) {
+        props.push({ kind: 'rug', x: c.x, y: c.y, rot: rng.pick([0, Math.PI / 2]), scale: 1, roomId: rm.id, flickerPhase: 0 });
+        // rugs don't block (they're on the floor)
+      }
+    }
+  }
+
   // ---- Lights: farthest-point-sampled subset of torches within budget ----
   const torchPropIdx: number[] = [];
   for (let i = 0; i < props.length; i++) if (props[i].kind === 'torch') torchPropIdx.push(i);
