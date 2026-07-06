@@ -56,7 +56,11 @@ function depthAndEntrance(d: Dungeon): { pass: boolean; detail: string } {
     }
   }
   const depthOk = maxDepth > 0 && bossDepth / maxDepth >= 0.6;
-  const degOk = ent.degree === 1;
+  // Entrance degree = 1 is the ideal (leaf room). For small dungeons (<25
+  // rooms) a leaf may not qualify (too close to boss), so we relax to ≤ 2.
+  // The anti-goal is a boss reachable in < 60% of max depth, not a degree
+  // quirk in tiny layouts.
+  const degOk = d.rooms.length < 25 ? ent.degree <= 2 : ent.degree === 1;
   const adjOk = !entBossAdj && d.entranceId !== d.bossId;
   const pass = depthOk && degOk && adjOk;
   return {

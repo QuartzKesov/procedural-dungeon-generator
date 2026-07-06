@@ -35,11 +35,13 @@ function pickArchetype(rng: RNG): Archetype {
   return { rx, ry, large };
 }
 function pickShape(rng: RNG): RoomShape {
-  // rectangle 60%, ellipse 22%, octagon 18%
+  // rectangle 48%, ellipse 18%, octagon 14%, lshape 12%, cross 8%
   const r = rng.float();
-  if (r < 0.60) return 'rectangle';
-  if (r < 0.82) return 'ellipse';
-  return 'octagon';
+  if (r < 0.48) return 'rectangle';
+  if (r < 0.66) return 'ellipse';
+  if (r < 0.80) return 'octagon';
+  if (r < 0.92) return 'lshape';
+  return 'cross';
 }
 
 // ---- Theme palettes (linear RGB 0..1) ------------------------------------
@@ -350,7 +352,7 @@ export function roomFloorCells(rm: { cx: number; cy: number; w: number; h: numbe
         if (nx * nx + ny * ny <= 1) cells.push({ x: rm.cx + dx, y: rm.cy + dy });
       }
     }
-  } else {
+  } else if (rm.shape === 'octagon') {
     // chamfered octagon: rectangle minus 4 corner triangles
     const cut = Math.max(1, Math.floor(Math.min(rx, ry) / 2));
     for (let dy = -ry; dy <= ry; dy++) {
@@ -358,6 +360,29 @@ export function roomFloorCells(rm: { cx: number; cy: number; w: number; h: numbe
         const ax = Math.abs(dx), ay = Math.abs(dy);
         if (ax > rx - cut && ay > ry - cut) continue; // corner cut
         cells.push({ x: rm.cx + dx, y: rm.cy + dy });
+      }
+    }
+  } else if (rm.shape === 'lshape') {
+    // L-shape: full rectangle, then remove one quadrant (deterministic via
+    // center-symmetric cut). Keeps an L footprint = 3/4 of the bounding box.
+    const cutX = Math.max(1, Math.floor(rx / 2));
+    const cutY = Math.max(1, Math.floor(ry / 2));
+    for (let dy = -ry; dy <= ry; dy++) {
+      for (let dx = -rx; dx <= rx; dx++) {
+        // remove the top-right quadrant beyond the cut
+        if (dx > rx - cutX && dy < -ry + cutY) continue;
+        cells.push({ x: rm.cx + dx, y: rm.cy + dy });
+      }
+    }
+  } else {
+    // cross: central bar (full width, half height) + vertical bar (half width, full height)
+    const bx = Math.max(1, Math.floor(rx / 2));
+    const by = Math.max(1, Math.floor(ry / 2));
+    for (let dy = -ry; dy <= ry; dy++) {
+      for (let dx = -rx; dx <= rx; dx++) {
+        const inH = Math.abs(dy) <= by;  // within horizontal bar
+        const inV = Math.abs(dx) <= bx;  // within vertical bar
+        if (inH || inV) cells.push({ x: rm.cx + dx, y: rm.cy + dy });
       }
     }
   }

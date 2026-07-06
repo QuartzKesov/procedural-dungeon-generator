@@ -118,8 +118,8 @@ function portalGeo(): THREE.BufferGeometry {
 export interface DungeonScene {
   group: THREE.Group;
   lights: THREE.PointLight[];
-  /** Per-frame update: torch/portal flicker + flame scale jitter. */
-  update(elapsedSec: number): void;
+  /** Per-frame update: torch/portal flicker + flame scale jitter + particles. */
+  update(elapsedSec: number, deltaSec: number): void;
   /** Rebuild overlays from current toggles. */
   setOverlays(toggles: OverlayToggles): void;
   /** Drive staged build animation (0..1). */
@@ -431,6 +431,106 @@ export function buildDungeonScene(d: Dungeon, opts: BuildOptions): DungeonScene 
   group.add(bossLight); lights.push(bossLight);
   flickerLights.push({ light: bossLight, base: 6.0, phase: 0.6, kind: 'boss' });
 
+  // ---- ROOM GLOW PLANES (key rooms get a soft ground glow) ----
+  // A flat, additive, unlit disc just above the floor that tints the area
+  // around entrance/boss/shrine/treasure rooms. Cheap (1 quad each) and
+  // reads as "this room matters" even when torches are off.
+  const glowGeo = new THREE.CircleGeometry(1, 24);
+  glowGeo.rotateX(-Math.PI / 2);
+  const makeGlow = (room: Room, color: number, radius: number) => {
+    const mat = new THREE.MeshBasicMaterial({
+      color, transparent: true, opacity: 0.28,
+      blending: THREE.AdditiveBlending, depthWrite: false,
+    });
+    const mesh = new THREE.Mesh(glowGeo, mat);
+    mesh.position.set(worldX(room.cx), 0.04, worldZ(room.cy));
+    mesh.scale.setScalar(radius);
+    group.add(mesh);
+    return mesh;
+  };
+  const glowMeshes: THREE.Mesh[] = [];
+  glowMeshes.push(makeGlow(d.rooms[d.entranceId], 0x4060ff, Math.max(d.rooms[d.entranceId].w, d.rooms[d.entranceId].h) * 1.6));
+  glowMeshes.push(makeGlow(boss, 0xff2a1a, Math.max(boss.w, boss.h) * 1.8));
+  for (const r of d.rooms) {
+    if (r.type === 'shrine') glowMeshes.push(makeGlow(r, 0x30c8ff, Math.max(r.w, r.h) * 1.4));
+    else if (r.type === 'treasure') glowMeshes.push(makeGlow(r, 0xffc830, Math.max(r.w, r.h) * 1.3));
+    else if (r.type === 'elite') glowMeshes.push(makeGlow(r, 0xff6020, Math.max(r.w, r.h) * 1.3));
+  }
+
+  // ---- PARTICLE EMBERS (rising sparks from lit torches + braziers) ----
+  // One THREE.Points cloud shared across all emitters. Each particle has a
+  // source position, upward velocity, lifetime, and fade. CPU-driven but
+  // bounded (≤ 8 particles per emitter × #emitters).
+  const emberSources: Array<{ x: number; y: number; z: number; rate: number; color: THREE.Color }> = [];
+  for (const t of litTorchPropObjects) {
+    const ox = Math.sin(t.rot), oz = -Math.cos(t.rot);
+    emberSources.push({
+      x: worldX(t.x) + ox * 0.45, y: 1.35, z: worldZ(t.y) + oz * 0.45,
+      rate: 5, color: new THREE.Color(0xff9a3a),
+    });
+  }
+  for (const b of braziers) {
+    emberSources.push({
+      x: worldX(b.x), y: 0.7, z: worldZ(b.y),
+      rate: 8, color: new THREE.Color(0xff7a2a),
+    });
+  }
+  // boss arena gets ambient embers too (smoldering atmosphere)
+  emberSources.push({
+    x: worldX(boss.cx), y: 0.5, z: worldZ(boss.cy),
+    rate: 6, color: new THREE.Color(0xff4a2a),
+  });
+  const MAX_EMBERS = Math.min(600, emberSources.reduce((n, s) => n + s.rate * 10, 0));
+  const emberPositions = new Float32Array(MAX_EMBERS * 3);
+  const emberColors = new Float32Array(MAX_EMBERS * 3);
+  const emberState: Array<{ life: number; maxLife: number; vx: number; vy: number; vz: number; src: number }> = [];
+  for (let i = 0; i < MAX_EMBERS; i++) {
+    emberPositions[i * 3] = 9999; // off-screen until spawned
+    emberState.push({ life: 0, maxLife: 1, vx: 0, vy: 0, vz: 0, src: 0 });
+  }
+  const emberGeo = new THREE.BufferGeometry();
+  emberGeo.setAttribute('position', new THREE.BufferAttribute(emberPositions, 3));
+  emberGeo.setAttribute('color', new THREE.BufferAttribute(emberColors, 3));
+  // Soft round ember sprite via a canvas texture (radial gradient).
+  const emberCanvas = document.createElement('canvas');
+  emberCanvas.width = 32; emberCanvas.height = 32;
+  const ectx = emberCanvas.getContext('2d')!;
+  const grad = ectx.createRadialGradient(16, 16, 0, 16, 16, 16);
+  grad.addColorStop(0, 'rgba(255,255,255,1)');
+  grad.addColorStop(0.4, 'rgba(255,200,120,0.8)');
+  grad.addColorStop(1, 'rgba(255,120,40,0)');
+  ectx.fillStyle = grad;
+  ectx.fillRect(0, 0, 32, 32);
+  const emberTex = new THREE.CanvasTexture(emberCanvas);
+  const emberMat = new THREE.PointsMaterial({
+    size: 0.7, map: emberTex, vertexColors: true, transparent: true,
+    blending: THREE.AdditiveBlending, depthWrite: false, opacity: 1.0,
+    sizeAttenuation: true,
+  });
+  const emberPoints = new THREE.Points(emberGeo, emberMat);
+  emberPoints.frustumCulled = false;
+  group.add(emberPoints);
+  let emberWriteIdx = 0;
+  const spawnEmber = (srcIdx: number) => {
+    const s = emberSources[srcIdx];
+    const st = emberState[emberWriteIdx];
+    st.life = 0;
+    st.maxLife = 1.2 + Math.random() * 1.8;
+    st.vx = (Math.random() - 0.5) * 0.5;
+    st.vy = 0.7 + Math.random() * 0.9;
+    st.vz = (Math.random() - 0.5) * 0.5;
+    st.src = srcIdx;
+    emberPositions[emberWriteIdx * 3] = s.x + (Math.random() - 0.5) * 0.25;
+    emberPositions[emberWriteIdx * 3 + 1] = s.y;
+    emberPositions[emberWriteIdx * 3 + 2] = s.z + (Math.random() - 0.5) * 0.25;
+    // bright at birth, fades via life in update()
+    emberColors[emberWriteIdx * 3] = s.color.r;
+    emberColors[emberWriteIdx * 3 + 1] = s.color.g;
+    emberColors[emberWriteIdx * 3 + 2] = s.color.b;
+    emberWriteIdx = (emberWriteIdx + 1) % MAX_EMBERS;
+  };
+  let emberAccum = 0;
+
   // ---- DEBUG OVERLAYS ----
   const overlayGroup = new THREE.Group();
   overlayGroup.name = 'Overlays';
@@ -550,6 +650,9 @@ export function buildDungeonScene(d: Dungeon, opts: BuildOptions): DungeonScene 
   // store prop base scales for pop animation
   const propMeshes: THREE.InstancedMesh[] = [pillarMesh, debrisMesh, chestMesh, brazierMesh, bracketMesh, flameMesh, crystalMesh, portalMesh, ...spawnGroups].filter(Boolean) as THREE.InstancedMesh[];
 
+  // store glow base opacity for build-animation ramp
+  const glowBaseOpacity = glowMeshes.map((m) => (m.material as THREE.MeshBasicMaterial).opacity);
+
   function applyBuildProgress(p: number) {
     buildProgress = p;
     // floors flood: reveal cells with bfs <= floodThreshold
@@ -606,11 +709,17 @@ export function buildDungeonScene(d: Dungeon, opts: BuildOptions): DungeonScene 
     // lights ramp
     const lightT = p < 0.82 ? 0.15 : p < 1.0 ? 0.15 + 0.85 * ((p - 0.82) / 0.18) : 1;
     for (const fl of flickerLights) fl.light.intensity = fl.base * lightT;
+    // glow ramp (follows lights)
+    for (let gi = 0; gi < glowMeshes.length; gi++) {
+      (glowMeshes[gi].material as THREE.MeshBasicMaterial).opacity = glowBaseOpacity[gi] * lightT;
+    }
   }
   applyBuildProgress(buildProgress);
 
-  // ---- update (flicker) ----
-  function update(elapsedSec: number) {
+  // ---- update (flicker + particles + glow pulse) ----
+  function update(elapsedSec: number, deltaSec: number) {
+    const dt = Math.min(deltaSec, 0.05); // clamp to avoid spikes after tab switch
+    const ramp = buildProgress < 0.82 ? 0.15 : buildProgress >= 1 ? 1 : 0.15 + 0.85 * ((buildProgress - 0.82) / 0.18);
     for (const fl of flickerLights) {
       const t = elapsedSec * 12 + fl.phase;
       const flicker =
@@ -618,7 +727,6 @@ export function buildDungeonScene(d: Dungeon, opts: BuildOptions): DungeonScene 
         0.14 * Math.sin(t) +
         0.08 * Math.sin(t * 2.7 + 1.3) +
         0.05 * Math.sin(t * 5.1 + 0.6);
-      const ramp = buildProgress < 0.82 ? 0.15 : buildProgress >= 1 ? 1 : 0.15 + 0.85 * ((buildProgress - 0.82) / 0.18);
       fl.light.intensity = fl.base * flicker * ramp;
     }
     // flame scale jitter
@@ -635,7 +743,6 @@ export function buildDungeonScene(d: Dungeon, opts: BuildOptions): DungeonScene 
         const baseSy = p.kind === 'brazier' ? 2.2 : 1;
         const baseSz = p.kind === 'brazier' ? 1.8 : 1;
         _s.set(baseSx * jx, baseSy * jy, baseSz * jx);
-        // keep position
         _m.compose(_v, _q, _s);
         flameMesh.setMatrixAt(i, _m);
       }
@@ -644,9 +751,59 @@ export function buildDungeonScene(d: Dungeon, opts: BuildOptions): DungeonScene 
     // crystal + portal gentle pulse
     if (crystalMesh) {
       crystalMesh.rotation.y = elapsedSec * 0.6;
+      crystalMesh.position.y = 1.0 + Math.sin(elapsedSec * 1.8) * 0.08;
     }
     if (portalMesh) {
       portalMesh.rotation.z = elapsedSec * 0.4;
+      portalMesh.scale.y = 1 + 0.06 * Math.sin(elapsedSec * 2.2);
+    }
+    // glow pulse (slow breath on key-room glows)
+    for (let gi = 0; gi < glowMeshes.length; gi++) {
+      const base = glowBaseOpacity[gi];
+      const pulse = 1 + 0.18 * Math.sin(elapsedSec * 1.5 + gi * 0.7);
+      (glowMeshes[gi].material as THREE.MeshBasicMaterial).opacity = base * pulse * ramp;
+    }
+    // ---- ember particle simulation ----
+    if (emberSources.length > 0 && ramp > 0.2) {
+      // spawn
+      emberAccum += dt;
+      const spawnInterval = 1 / 45; // ~45 spawns/sec distributed across sources
+      while (emberAccum > spawnInterval) {
+        emberAccum -= spawnInterval;
+        // weighted pick of source by rate
+        let total = 0;
+        for (const s of emberSources) total += s.rate;
+        let r = Math.random() * total;
+        let si = 0;
+        for (let k = 0; k < emberSources.length; k++) { r -= emberSources[k].rate; if (r <= 0) { si = k; break; } }
+        spawnEmber(si);
+      }
+      // update existing
+      for (let i = 0; i < MAX_EMBERS; i++) {
+        const st = emberState[i];
+        if (st.maxLife <= 0) continue;
+        st.life += dt;
+        if (st.life >= st.maxLife) {
+          // retire
+          emberPositions[i * 3] = 9999;
+          st.maxLife = 0;
+          continue;
+        }
+        // drift up + slight horizontal sway + decelerate
+        const sway = Math.sin(elapsedSec * 3 + i) * 0.15 * dt;
+        emberPositions[i * 3] += (st.vx + sway) * dt;
+        emberPositions[i * 3 + 1] += st.vy * dt;
+        emberPositions[i * 3 + 2] += st.vz * dt;
+        st.vy *= (1 - 0.4 * dt); // slow down
+        // fade color toward dark as it dies
+        const f = 1 - st.life / st.maxLife;
+        const s = emberSources[st.src];
+        emberColors[i * 3] = s.color.r * f;
+        emberColors[i * 3 + 1] = s.color.g * f * 0.8;
+        emberColors[i * 3 + 2] = s.color.b * f * 0.5;
+      }
+      emberGeo.attributes.position.needsUpdate = true;
+      emberGeo.attributes.color.needsUpdate = true;
     }
   }
 

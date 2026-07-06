@@ -24,7 +24,7 @@ export const VOID = 0;
 export const FLOOR = 1;
 export const WALL = 2;
 
-export type RoomShape = 'rectangle' | 'ellipse' | 'octagon';
+export type RoomShape = 'rectangle' | 'ellipse' | 'octagon' | 'lshape' | 'cross';
 export type RoomType =
   | 'entrance'
   | 'boss'
