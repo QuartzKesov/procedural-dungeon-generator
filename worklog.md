@@ -168,3 +168,22 @@ Stage Summary:
 - VLM assessment: 8/10 — all features functional
 - Clean lint, dev server stable on port 3000
 - Next round: could add minimap viewport indicator, room hover preview, more prop variety, water/lava features, saved layouts gallery
+
+---
+Task ID: cron-review-4
+Agent: main (webDevReview cron)
+Task: Periodic QA + add new features (minimap viewport indicator, water/lava pools, new prop variety, styling polish)
+
+Work Log:
+- QA baseline: 6/6 tests pass, 8.0ms perf, lint clean, dev server stable
+- Enhancement: minimap viewport indicator — a crosshair + circle marker drawn on the minimap showing the current camera center position. Updated every frame via minimapViewportRef in the render loop. Uses putImageData to restore the base minimap image, then draws the crosshair at the viewport center (computed from state.pan + grid center). Also draws a clamped dashed rectangle when the viewport is smaller than the minimap (zoomed in). Verified: function called with correct pan values (0→36.6 after drag), 2094 amber pixels render.
+- Enhancement: water/lava pools — translucent MeshBasicMaterial planes placed in ~25% of combat rooms + boss rooms. Water (blue, normal blending) for low-difficulty rooms, lava (red, additive blending) for forge theme / high-difficulty rooms. Animated shimmer: water gentle (0.8× speed, 15% amplitude), lava faster churn (2× speed, 30% amplitude). Verified: 0.45% water pixels, 0.43% lava pixels at zoom.
+- Enhancement: 3 new prop types — stalagmites (tall ConeGeometry, cavern/forge/jungle themes only, medium+ rooms), bones (flattened IcosahedronGeometry, low-difficulty combat rooms, 35% chance), barrels (CylinderGeometry, combat rooms, 20% chance). Added to types PropKind, generator decorate(), scene geometry factories + materials + instanced meshes. Verified: stalagmites generate 44 in cavern, bones 2-3, barrels 5-9 per dungeon.
+- All acceptance tests pass for seeds {1,7,42,1337,99999,123456} and all 6 themes. 60-room gen 8.0ms.
+
+Stage Summary:
+- ALL 6 acceptance tests pass across all tested seeds, room counts, and all 6 themes
+- 60-room generation: 8.0ms (best of 3), well under 50ms budget
+- New features: minimap viewport indicator (crosshair + clamped rectangle, tracks camera pan/zoom), water/lava pools (animated translucent surfaces, water for low-difficulty, lava for forge/high-difficulty), 3 new prop types (stalagmites, bones, barrels)
+- Clean lint, dev server stable on port 3000
+- Next round: could add room hover preview tooltip, saved layouts gallery, more prop variety, day/night transitions, water reflection effects

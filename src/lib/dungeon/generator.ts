@@ -666,6 +666,50 @@ function decorate(rng: RNG, dungeon: Dungeon & {
     }
   }
 
+  // ---- Stalagmites (cavern/forge themes, medium-large rooms) ----
+  // Tall cone props that read as cave formations. Only in non-key rooms.
+  if (dungeon.params.theme === 'cavern' || dungeon.params.theme === 'forge' || dungeon.params.theme === 'jungle') {
+    for (const rm of rooms) {
+      if (rm.type === 'entrance' || rm.type === 'boss' || rm.type === 'treasure') continue;
+      if (rm.w * rm.h < 20) continue; // only medium+ rooms
+      const count = Math.floor(rm.cells / 40 * dungeon.params.decorDensity);
+      const avail = roomCells[rm.id].filter((c) => !blocked[c.y * W + c.x]);
+      for (let i = avail.length - 1; i > 0; i--) { const j = rng.int(0, i); [avail[i], avail[j]] = [avail[j], avail[i]]; }
+      for (let k = 0; k < Math.min(count, avail.length); k++) {
+        const c = avail[k];
+        props.push({ kind: 'stalagmite', x: c.x, y: c.y, rot: 0, scale: rng.range(0.8, 1.4), roomId: rm.id, flickerPhase: 0 });
+        blocked[c.y * W + c.x] = 1;
+      }
+    }
+  }
+
+  // ---- Bones (low-difficulty combat rooms, occasional) ----
+  for (const rm of rooms) {
+    if (rm.type !== 'combat') continue;
+    if (rm.difficulty > 0.5) continue; // only early rooms
+    if (rng.chance(0.35)) {
+      const avail = roomCells[rm.id].filter((c) => !blocked[c.y * W + c.x]);
+      if (avail.length > 0) {
+        const c = avail[rng.int(0, avail.length - 1)];
+        props.push({ kind: 'bones', x: c.x, y: c.y, rot: rng.range(0, Math.PI * 2), scale: rng.range(0.8, 1.2), roomId: rm.id, flickerPhase: 0 });
+        blocked[c.y * W + c.x] = 1;
+      }
+    }
+  }
+
+  // ---- Barrels (treasure-adjacent combat rooms, storage props) ----
+  for (const rm of rooms) {
+    if (rm.type !== 'combat') continue;
+    if (rng.chance(0.2)) {
+      const avail = roomCells[rm.id].filter((c) => !blocked[c.y * W + c.x]);
+      if (avail.length > 0) {
+        const c = avail[rng.int(0, avail.length - 1)];
+        props.push({ kind: 'barrel', x: c.x, y: c.y, rot: 0, scale: 1, roomId: rm.id, flickerPhase: 0 });
+        blocked[c.y * W + c.x] = 1;
+      }
+    }
+  }
+
   // ---- Braziers ringing the boss arena ----
   const boss = rooms[bossId];
   {

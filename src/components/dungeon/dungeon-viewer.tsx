@@ -33,6 +33,7 @@ interface ThreeState {
   raf: number;
   zoom: number;
   pan: THREE.Vector2; // world-space pan offset
+  cameraYaw: number;
 }
 
 const ROOM_TYPE_COLOR: Record<string, string> = {
@@ -51,6 +52,7 @@ export function DungeonViewer() {
   const buildAnimRef = useRef<{ active: boolean; progress: number }>({ active: false, progress: 1 });
   const focusOnCellRef = useRef<((gridX: number, gridY: number) => void) | null>(null);
   const audioRef = useRef<DungeonAudio | null>(null);
+  const minimapViewportRef = useRef<(() => void) | null>(null);
 
   const [params, setParams] = useState<Params>(() => parseHashParams());
   const [overlays, setOverlays] = useState<OverlayToggles>({
@@ -150,7 +152,7 @@ export function DungeonViewer() {
     const startTime = performance.now();
     const state: ThreeState = {
       renderer, scene, camera, dungeonScene: null, startTime,
-      raf: 0, zoom: 1, pan: new THREE.Vector2(0, 0),
+      raf: 0, zoom: 1, pan: new THREE.Vector2(0, 0), cameraYaw: 45,
     };
     threeRef.current = state;
     // room pick callback (set by React state setter below)
@@ -333,6 +335,9 @@ export function DungeonViewer() {
         ds.update((now - state.startTime) / 1000, dt);
       }
       renderer.render(scene, camera);
+      // redraw minimap viewport indicator (tracks camera pan/zoom)
+      const vpFn = minimapViewportRef.current;
+      if (vpFn) vpFn();
     };
     loop();
 
@@ -411,7 +416,7 @@ export function DungeonViewer() {
     return () => { cancelled = true; clearTimeout(id); };
   }, []);
 
-  // ---- minimap ----
+  // ---- minimap base (static, redrawn on dungeon change) ----
   const drawMinimap = useCallback(() => {
     const canvas = minimapRef.current;
     if (!canvas) return;
@@ -452,9 +457,66 @@ export function DungeonViewer() {
     dot(d.rooms[d.entranceId].cx, d.rooms[d.entranceId].cy, '#ffffff', 3);
     dot(d.rooms[d.bossId].cx, d.rooms[d.bossId].cy, '#ff2222', 4);
     for (const r of d.rooms) if (r.type === 'treasure') dot(r.cx, r.cy, '#ffd24a', 3);
+    // store the base image for the viewport overlay to redraw on top of
+    (canvas as any)._baseImage = ctx.getImageData(0, 0, W, H);
   }, [dungeon]);
 
   useEffect(() => { drawMinimap(); }, [drawMinimap]);
+
+  // ---- minimap viewport indicator (drawn every frame on top of base) ----
+  const drawMinimapViewport = useCallback(() => {
+    const canvas = minimapRef.current;
+    const state = threeRef.current;
+    if (!canvas || !state) return;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+    const d = dungeon;
+    const W = canvas.width, H = canvas.height;
+    const sx = W / d.W, sy = H / d.H;
+    // restore base image
+    const base = (canvas as any)._baseImage;
+    if (base) ctx.putImageData(base, 0, 0);
+    else return;
+    // The ortho camera looks at (pan.x, 0, pan.y) in world space.
+    // Grid space = world + center, so viewport center in grid = pan + center.
+    const cx = (d.W - 1) / 2, cz = (d.H - 1) / 2;
+    const vcx = state.pan.x + cx;
+    const vcy = state.pan.y + cz;
+    // viewport center in minimap pixels (y is flipped)
+    const px = vcx * sx;
+    const py = (d.H - vcy) * sy;
+    // draw a crosshair marker at the viewport center
+    ctx.strokeStyle = 'rgba(255, 200, 100, 0.9)';
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    ctx.moveTo(px - 6, py); ctx.lineTo(px + 6, py);
+    ctx.moveTo(px, py - 6); ctx.lineTo(px, py + 6);
+    ctx.stroke();
+    // small circle around the crosshair
+    ctx.beginPath();
+    ctx.arc(px, py, 5, 0, Math.PI * 2);
+    ctx.stroke();
+    // also draw a clamped viewport rectangle (clipped to minimap bounds)
+    const halfW = (state.camera.right - state.camera.left) / 2;
+    const halfH = (state.camera.top - state.camera.bottom) / 2;
+    const ext = (halfW + halfH) / Math.SQRT2;
+    const gx0 = vcx - ext, gx1 = vcx + ext;
+    const gy0 = vcy - ext, gy1 = vcy + ext;
+    const rx0 = gx0 * sx, rx1 = gx1 * sx;
+    const ry0 = (d.H - gy1) * sy, ry1 = (d.H - gy0) * sy;
+    const rx = Math.max(0, Math.min(rx0, rx1));
+    const ry = Math.max(0, Math.min(ry0, ry1));
+    const rw = Math.min(W, Math.max(rx0, rx1)) - rx;
+    const rh = Math.min(H, Math.max(ry0, ry1)) - ry;
+    if (rw > 2 && rh > 2 && rw < W && rh < H) {
+      ctx.setLineDash([3, 2]);
+      ctx.strokeStyle = 'rgba(255, 200, 100, 0.5)';
+      ctx.strokeRect(rx, ry, rw, rh);
+      ctx.setLineDash([]);
+    }
+  }, [dungeon]);
+  // keep the ref updated so the render loop can call it
+  minimapViewportRef.current = drawMinimapViewport;
 
   // ---- handlers ----
   const regenerate = useCallback(() => {

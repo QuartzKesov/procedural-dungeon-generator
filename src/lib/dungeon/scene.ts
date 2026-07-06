@@ -118,6 +118,24 @@ function portalGeo(): THREE.BufferGeometry {
   g.translate(0, 0.9, 0);
   return g;
 }
+function stalagmiteGeo(): THREE.BufferGeometry {
+  // tall cone — cave formation
+  const g = new THREE.ConeGeometry(0.35, 1.4, 6);
+  g.translate(0, 0.7, 0);
+  return g;
+}
+function bonesGeo(): THREE.BufferGeometry {
+  // small cluster — represented as a flattened icosahedron
+  const g = new THREE.IcosahedronGeometry(0.28, 0);
+  g.scale(1, 0.3, 1);
+  g.translate(0, 0.08, 0);
+  return g;
+}
+function barrelGeo(): THREE.BufferGeometry {
+  const g = new THREE.CylinderGeometry(0.22, 0.25, 0.7, 8);
+  g.translate(0, 0.35, 0);
+  return g;
+}
 
 // ---- The scene handle ----------------------------------------------------
 export interface DungeonScene {
@@ -172,6 +190,9 @@ export function buildDungeonScene(d: Dungeon, opts: BuildOptions): DungeonScene 
   const chests = d.props.filter((p) => p.kind === 'chest');
   const crystals = d.props.filter((p) => p.kind === 'crystal');
   const portals = d.props.filter((p) => p.kind === 'portal');
+  const stalagmites = d.props.filter((p) => p.kind === 'stalagmite');
+  const bones = d.props.filter((p) => p.kind === 'bones');
+  const barrels = d.props.filter((p) => p.kind === 'barrel');
   const litTorchPropIds: number[] = (d as any).litTorchPropIds ?? [];
   const litTorchSet = new Set(litTorchPropIds);
   const litTorchPropObjects = litTorchPropIds.map((pi) => d.props[pi]).filter(Boolean);
@@ -187,6 +208,9 @@ export function buildDungeonScene(d: Dungeon, opts: BuildOptions): DungeonScene 
   const flameMat = new THREE.MeshBasicMaterial({ color: 0xffb24a, transparent: true, opacity: 0.95 });
   const crystalMat = new THREE.MeshBasicMaterial({ color: 0x6ad0ff, transparent: true, opacity: 0.9 });
   const portalMat = new THREE.MeshBasicMaterial({ color: 0x8aa8ff, transparent: true, opacity: 0.85 });
+  const stalagmiteMat = new THREE.MeshLambertMaterial({ color: 0x5a4a3a });
+  const bonesMat = new THREE.MeshLambertMaterial({ color: 0xc8c0a8, emissive: 0x2a2418 });
+  const barrelMat = new THREE.MeshLambertMaterial({ color: 0x6a4a2a });
   const spawnMats = [
     new THREE.MeshBasicMaterial({ color: 0x88ff88, transparent: true, opacity: 0.7 }), // tier 0
     new THREE.MeshBasicMaterial({ color: 0xffcc44, transparent: true, opacity: 0.75 }), // tier 1
@@ -253,6 +277,39 @@ export function buildDungeonScene(d: Dungeon, opts: BuildOptions): DungeonScene 
   if (floorMesh.instanceColor) floorMesh.instanceColor.needsUpdate = true;
   floorMesh.frustumCulled = false;
   group.add(floorMesh);
+
+  // ---- WATER / LAVA POOLS (visual feature in select rooms) ----
+  // Some rooms get a translucent liquid pool overlay — water for low-difficulty
+  // rooms, lava for forge theme / high-difficulty rooms. Purely cosmetic.
+  const waterGeo = new THREE.PlaneGeometry(1, 1);
+  waterGeo.rotateX(-Math.PI / 2);
+  const waterMat = new THREE.MeshBasicMaterial({
+    color: 0x2a5a8a, transparent: true, opacity: 0.55,
+    blending: THREE.NormalBlending, depthWrite: false,
+  });
+  const lavaMat = new THREE.MeshBasicMaterial({
+    color: 0xff4a1a, transparent: true, opacity: 0.6,
+    blending: THREE.AdditiveBlending, depthWrite: false,
+  });
+  const waterMeshes: THREE.Mesh[] = [];
+  for (const r of d.rooms) {
+    // ~25% of combat rooms get a pool; boss gets a lava pool in forge theme
+    const n2 = valueNoise(r.cx, r.cy, d.params.seed ^ 0x7777);
+    const wantPool = (r.type === 'combat' && n2 < 0.25) || r.type === 'boss';
+    if (!wantPool) continue;
+    const isLava = theme === 'forge' || r.difficulty > 0.8;
+    const mat = isLava ? lavaMat : waterMat;
+    // pool fills the inner area of the room (smaller than the room footprint)
+    const poolW = Math.max(1, r.w * 0.7);
+    const poolH = Math.max(1, r.h * 0.7);
+    const mesh = new THREE.Mesh(waterGeo, mat);
+    mesh.position.set(worldX(r.cx), 0.03, worldZ(r.cy));
+    mesh.scale.set(poolW * 2, 1, poolH * 2);
+    mesh.userData.isLava = isLava;
+    mesh.userData.baseOpacity = mat.opacity;
+    group.add(mesh);
+    waterMeshes.push(mesh);
+  }
 
   // ---- WALL instanced mesh (height jitter) ----
   const wallMesh = new THREE.InstancedMesh(wallGeo(2.2), wallMat, Math.max(1, wallCount));
@@ -380,6 +437,30 @@ export function buildDungeonScene(d: Dungeon, opts: BuildOptions): DungeonScene 
     rotY: 0,
   }));
   if (portalMesh) group.add(portalMesh);
+
+  // stalagmites (cave formations)
+  const stalagmiteMesh = buildPropInstanced(stalagmites, stalagmiteGeo(), stalagmiteMat, (p) => ({
+    pos: new THREE.Vector3(worldX(p.x), 0, worldZ(p.y)),
+    scale: new THREE.Vector3(p.scale, p.scale, p.scale),
+    rotY: p.rot,
+  }));
+  if (stalagmiteMesh) group.add(stalagmiteMesh);
+
+  // bones (bone piles)
+  const bonesMesh = buildPropInstanced(bones, bonesGeo(), bonesMat, (p) => ({
+    pos: new THREE.Vector3(worldX(p.x), 0, worldZ(p.y)),
+    scale: new THREE.Vector3(p.scale, 1, p.scale),
+    rotY: p.rot,
+  }));
+  if (bonesMesh) group.add(bonesMesh);
+
+  // barrels (storage)
+  const barrelMesh = buildPropInstanced(barrels, barrelGeo(), barrelMat, (p) => ({
+    pos: new THREE.Vector3(worldX(p.x), 0, worldZ(p.y)),
+    scale: new THREE.Vector3(1, 1, 1),
+    rotY: p.rot,
+  }));
+  if (barrelMesh) group.add(barrelMesh);
 
   // spawn markers (grouped by tier)
   const spawnGroups: THREE.InstancedMesh[] = [];
@@ -755,7 +836,7 @@ export function buildDungeonScene(d: Dungeon, opts: BuildOptions): DungeonScene 
       }
   }
   // store prop base scales for pop animation
-  const propMeshes: THREE.InstancedMesh[] = [pillarMesh, debrisMesh, chestMesh, brazierMesh, bracketMesh, flameMesh, crystalMesh, portalMesh, ...spawnGroups].filter(Boolean) as THREE.InstancedMesh[];
+  const propMeshes: THREE.InstancedMesh[] = [pillarMesh, debrisMesh, chestMesh, brazierMesh, bracketMesh, flameMesh, crystalMesh, portalMesh, stalagmiteMesh, bonesMesh, barrelMesh, ...spawnGroups].filter(Boolean) as THREE.InstancedMesh[];
 
   // store glow base opacity for build-animation ramp
   const glowBaseOpacity = glowMeshes.map((m) => (m.material as THREE.MeshBasicMaterial).opacity);
@@ -917,6 +998,16 @@ export function buildDungeonScene(d: Dungeon, opts: BuildOptions): DungeonScene 
       const pulse = 0.5 + 0.4 * Math.sin(elapsedSec * 3);
       (highlightRing.material as THREE.MeshBasicMaterial).opacity = pulse * ramp;
       highlightRing.rotation.z = elapsedSec * 0.5;
+    }
+    // water/lava pool shimmer — gentle opacity + position ripple
+    for (let wi2 = 0; wi2 < waterMeshes.length; wi2++) {
+      const wm = waterMeshes[wi2];
+      const base = wm.userData.baseOpacity as number;
+      const isLava = wm.userData.isLava as boolean;
+      const ripple = isLava
+        ? 0.7 + 0.3 * Math.sin(elapsedSec * 2 + wi2) // lava churns faster
+        : 0.85 + 0.15 * Math.sin(elapsedSec * 0.8 + wi2 * 1.3); // water gentle
+      (wm.material as THREE.MeshBasicMaterial).opacity = base * ripple * ramp;
     }
   }
 

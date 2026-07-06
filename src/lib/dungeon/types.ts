@@ -68,7 +68,10 @@ export type PropKind =
   | 'debris'
   | 'chest'
   | 'crystal'
-  | 'portal';
+  | 'portal'
+  | 'stalagmite'
+  | 'bones'
+  | 'barrel';
 
 export interface Prop {
   kind: PropKind;
