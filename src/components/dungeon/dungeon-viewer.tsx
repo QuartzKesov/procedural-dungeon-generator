@@ -20,6 +20,7 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/comp
 import {
   Dices, Play, RefreshCw, FlaskConical, Eye, EyeOff, Map as MapIcon, Layers, Zap,
   Link2, Volume2, VolumeX, Crosshair, Skull, DoorOpen, Sparkles,
+  Save, Bookmark, Trash2, Download, RotateCw, Route,
 } from 'lucide-react';
 
 interface ThreeState {
@@ -52,7 +53,7 @@ export function DungeonViewer() {
 
   const [params, setParams] = useState<Params>(() => parseHashParams());
   const [overlays, setOverlays] = useState<OverlayToggles>({
-    delaunay: false, mst: false, loops: false, critical: false, difficulty: false,
+    delaunay: false, mst: false, loops: false, critical: false, difficulty: false, patrols: false,
   });
   const [animateBuild, setAnimateBuild] = useState(true);
   const [leftOpen, setLeftOpen] = useState(true);
@@ -60,6 +61,9 @@ export function DungeonViewer() {
   const [perfResult, setPerfResult] = useState<TestResult | null>(null);
   const [audioOn, setAudioOn] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [presets, setPresets] = useState<Preset[]>([]);
+  const [presetName, setPresetName] = useState('');
+  const [showPresets, setShowPresets] = useState(false);
 
   // Generate the dungeon whenever params change. Fast (~25ms) → synchronous.
   const dungeon = useMemo<Dungeon>(() => generateDungeon(params), [params]);
@@ -76,7 +80,7 @@ export function DungeonViewer() {
   // ---- init Three.js once ----
   useEffect(() => {
     const container = containerRef.current!;
-    const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: false });
+    const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: false, preserveDrawingBuffer: true });
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
     renderer.setSize(container.clientWidth, container.clientHeight);
     renderer.setClearColor(0x05040a, 1);
@@ -126,6 +130,40 @@ export function DungeonViewer() {
     };
     renderer.domElement.addEventListener('wheel', onWheel, { passive: false });
 
+    // pinch-zoom (touch): track 2-finger distance, zoom proportionally
+    let pinchDist = 0;
+    const applyZoom = () => {
+      const w = container.clientWidth, h = container.clientHeight;
+      const aspect = w / h;
+      const half = halfFrustum();
+      camera.left = -half * aspect; camera.right = half * aspect;
+      camera.top = half; camera.bottom = -half;
+      camera.updateProjectionMatrix();
+    };
+    const onTouchStart = (e: TouchEvent) => {
+      if (e.touches.length === 2) {
+        const dx = e.touches[0].clientX - e.touches[1].clientX;
+        const dy = e.touches[0].clientY - e.touches[1].clientY;
+        pinchDist = Math.sqrt(dx * dx + dy * dy);
+      }
+    };
+    const onTouchMove = (e: TouchEvent) => {
+      if (e.touches.length === 2) {
+        e.preventDefault();
+        const dx = e.touches[0].clientX - e.touches[1].clientX;
+        const dy = e.touches[0].clientY - e.touches[1].clientY;
+        const d = Math.sqrt(dx * dx + dy * dy);
+        if (pinchDist > 0) {
+          const factor = pinchDist / d; // pinch in (d smaller) → factor > 1 → zoom in
+          state.zoom = Math.max(0.4, Math.min(3.5, state.zoom * factor));
+          applyZoom();
+        }
+        pinchDist = d;
+      }
+    };
+    renderer.domElement.addEventListener('touchstart', onTouchStart, { passive: false });
+    renderer.domElement.addEventListener('touchmove', onTouchMove, { passive: false });
+
     // pan (drag)
     let dragging = false;
     let lastX = 0, lastY = 0;
@@ -135,22 +173,32 @@ export function DungeonViewer() {
       if (!dragging) return;
       const dx = e.clientX - lastX, dy = e.clientY - lastY;
       lastX = e.clientX; lastY = e.clientY;
-      // pan in world units: screen delta → world delta via ortho frustum
+      // pan in world units: screen delta → world delta via ortho frustum.
+      // Direction follows the camera yaw so panning feels natural after rotation.
       const worldPerPx = (camera.top - camera.bottom) / container.clientHeight;
-      // isometric: screen-x moves along (cos45, sin45) world; screen-y along (-sin45, cos45) tilted
-      state.pan.x -= (dx * Math.cos(Math.PI / 4) - dy * Math.cos(Math.PI / 4)) * worldPerPx;
-      state.pan.y -= (dx * Math.sin(Math.PI / 4) + dy * Math.sin(Math.PI / 4)) * worldPerPx;
+      const yaw = THREE.MathUtils.degToRad((state as any).cameraYaw ?? 45);
+      const cosY = Math.cos(yaw), sinY = Math.sin(yaw);
+      // screen-x → world (cos, sin); screen-y → (-sin, cos) (perpendicular, tilted by iso)
+      state.pan.x -= (dx * cosY - dy * cosY) * worldPerPx;
+      state.pan.y -= (dx * sinY + dy * sinY) * worldPerPx;
       applyCamera();
     };
     const applyCamera = () => {
-      const dir = new THREE.Vector3(Math.cos(THREE.MathUtils.degToRad(37)) * Math.cos(THREE.MathUtils.degToRad(45)),
-        Math.sin(THREE.MathUtils.degToRad(37)),
-        Math.cos(THREE.MathUtils.degToRad(37)) * Math.sin(THREE.MathUtils.degToRad(45)));
+      const yaw = THREE.MathUtils.degToRad((state as any).cameraYaw ?? 45);
+      const pitch = THREE.MathUtils.degToRad(37);
+      const dir = new THREE.Vector3(
+        Math.cos(pitch) * Math.cos(yaw),
+        Math.sin(pitch),
+        Math.cos(pitch) * Math.sin(yaw),
+      );
       const dist = Math.max(currentDungeon.W, currentDungeon.H) * 0.9 + 30;
       const center = new THREE.Vector3(state.pan.x, 0, state.pan.y);
       camera.position.copy(center).addScaledVector(dir, dist);
       camera.lookAt(center);
+      camera.up.set(0, 1, 0);
     };
+    // expose rotation for the rotateCamera handler
+    (state as any).applyCameraRot = applyCamera;
 
     // focusOnCell: pan camera so a grid coordinate is centered.
     // grid (x,y) → world (x - cx, 0, y - cz). Smoothly animate via lerp.
@@ -208,6 +256,8 @@ export function DungeonViewer() {
       cancelAnimationFrame(state.raf);
       ro.disconnect();
       renderer.domElement.removeEventListener('wheel', onWheel);
+      renderer.domElement.removeEventListener('touchstart', onTouchStart);
+      renderer.domElement.removeEventListener('touchmove', onTouchMove);
       renderer.domElement.removeEventListener('pointerdown', onDown);
       renderer.domElement.removeEventListener('pointerup', onUp);
       renderer.domElement.removeEventListener('pointermove', onMove);
@@ -385,6 +435,52 @@ export function DungeonViewer() {
     else { a.start(); setAudioOn(true); }
   }, [audioOn]);
 
+  // ---- camera rotation (yaw in 45° increments) ----
+  const rotateCamera = useCallback((dir: 1 | -1) => {
+    const state = threeRef.current;
+    if (!state) return;
+    (state as any).cameraYaw = (((state as any).cameraYaw ?? 45) + dir * 45) % 360;
+    (state as any).applyCameraRot?.();
+  }, []);
+
+  // ---- export dungeon as PNG ----
+  const exportPng = useCallback(() => {
+    const state = threeRef.current;
+    if (!state) return;
+    // render once to ensure latest frame, then grab canvas
+    state.renderer.render(state.scene, state.camera);
+    const dataUrl = state.renderer.domElement.toDataURL('image/png');
+    const a = document.createElement('a');
+    a.href = dataUrl;
+    a.download = `dungeon-${dungeon.params.seed}-${dungeon.params.theme}.png`;
+    a.click();
+  }, [dungeon]);
+
+  // ---- presets (localStorage) ----
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem('dungeon-presets');
+      if (raw) setPresets(JSON.parse(raw));
+    } catch { /* ignore */ }
+  }, []);
+  const savePreset = useCallback(() => {
+    const name = presetName.trim() || `Seed ${params.seed}`;
+    const preset: Preset = { name, params: { ...params }, at: Date.now() };
+    const next = [preset, ...presets.filter((p) => p.name !== name)].slice(0, 20);
+    setPresets(next);
+    try { localStorage.setItem('dungeon-presets', JSON.stringify(next)); } catch {}
+    setPresetName('');
+  }, [presetName, params, presets]);
+  const loadPreset = useCallback((p: Preset) => {
+    setParams({ ...p.params });
+    setShowPresets(false);
+  }, []);
+  const deletePreset = useCallback((name: string) => {
+    const next = presets.filter((p) => p.name !== name);
+    setPresets(next);
+    try { localStorage.setItem('dungeon-presets', JSON.stringify(next)); } catch {}
+  }, [presets]);
+
   // keyboard shortcuts
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -395,10 +491,12 @@ export function DungeonViewer() {
       else if (e.key === 'e' || e.key === 'E') focusEntrance();
       else if (e.key === 'b' || e.key === 'B') focusBoss();
       else if (e.key === 'm' || e.key === 'M') toggleAudio();
+      else if (e.key === 'q' || e.key === 'Q') rotateCamera(-1);
+      else if (e.key === 't' || e.key === 'T') rotateCamera(1);
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [rollDice, regenerate, replayBuild, focusEntrance, focusBoss, toggleAudio]);
+  }, [rollDice, regenerate, replayBuild, focusEntrance, focusBoss, toggleAudio, rotateCamera]);
 
   const stats = dungeon.stats;
   const typeCounts = useMemo(() => {
@@ -450,6 +548,28 @@ export function DungeonViewer() {
             className="pointer-events-auto hidden h-7 w-7 items-center justify-center rounded-full border border-amber-800/40 bg-amber-950/20 text-amber-300/70 transition-colors hover:bg-red-900/40 hover:text-red-200 sm:flex"
           >
             <Skull className="h-3.5 w-3.5" />
+          </button>
+          <div className="mx-1 hidden h-5 w-px bg-amber-900/40 md:block" />
+          <button
+            onClick={() => rotateCamera(-1)}
+            title="Rotate camera left (Q)"
+            className="pointer-events-auto hidden h-7 w-7 items-center justify-center rounded-full border border-amber-800/40 bg-amber-950/20 text-amber-300/70 transition-colors hover:bg-amber-900/40 hover:text-amber-100 md:flex"
+          >
+            <RotateCw className="h-3.5 w-3.5 -scale-x-100" />
+          </button>
+          <button
+            onClick={() => rotateCamera(1)}
+            title="Rotate camera right (T)"
+            className="pointer-events-auto hidden h-7 w-7 items-center justify-center rounded-full border border-amber-800/40 bg-amber-950/20 text-amber-300/70 transition-colors hover:bg-amber-900/40 hover:text-amber-100 md:flex"
+          >
+            <RotateCw className="h-3.5 w-3.5" />
+          </button>
+          <button
+            onClick={exportPng}
+            title="Export as PNG"
+            className="pointer-events-auto hidden h-7 w-7 items-center justify-center rounded-full border border-amber-800/40 bg-amber-950/20 text-amber-300/70 transition-colors hover:bg-emerald-900/40 hover:text-emerald-200 md:flex"
+          >
+            <Download className="h-3.5 w-3.5" />
           </button>
         </div>
       </header>
@@ -511,6 +631,51 @@ export function DungeonViewer() {
                 </Button>
               </div>
 
+              {/* Presets: save / load / delete */}
+              <div className="space-y-2">
+                <button
+                  onClick={() => setShowPresets((v) => !v)}
+                  className="flex w-full items-center justify-between rounded-lg border border-amber-900/30 bg-amber-950/10 px-3 py-1.5 text-xs text-amber-200/70 transition-colors hover:bg-amber-900/20"
+                >
+                  <span className="flex items-center gap-1.5"><Bookmark className="h-3.5 w-3.5" /> Presets</span>
+                  <span className="font-mono text-[10px] text-amber-300/50">{presets.length} saved</span>
+                </button>
+                {showPresets && (
+                  <div className="space-y-2 rounded-lg border border-amber-900/30 bg-black/40 p-2">
+                    <div className="flex gap-1.5">
+                      <Input
+                        value={presetName}
+                        onChange={(e) => setPresetName(e.target.value)}
+                        placeholder="Preset name…"
+                        className="h-8 border-amber-900/40 bg-amber-950/20 text-xs text-amber-100"
+                        onKeyDown={(e) => { if (e.key === 'Enter') savePreset(); }}
+                      />
+                      <Button size="sm" onClick={savePreset} title="Save current params as preset"
+                        className="h-8 shrink-0 border-amber-700/50 bg-amber-800/40 px-2 text-amber-50 hover:bg-amber-700/50">
+                        <Save className="h-3.5 w-3.5" />
+                      </Button>
+                    </div>
+                    <div className="max-h-40 space-y-1 overflow-y-auto">
+                      {presets.length === 0 && (
+                        <p className="py-2 text-center text-[10px] text-amber-300/40">No presets saved yet</p>
+                      )}
+                      {presets.map((p) => (
+                        <div key={p.name} className="group flex items-center gap-1 rounded border border-amber-900/20 bg-amber-950/20 px-2 py-1">
+                          <button onClick={() => loadPreset(p)} className="min-w-0 flex-1 text-left">
+                            <div className="truncate text-[11px] text-amber-100/80">{p.name}</div>
+                            <div className="font-mono text-[9px] text-amber-300/40">seed {p.params.seed} · {p.params.roomCount}r · {p.params.theme}</div>
+                          </button>
+                          <button onClick={() => deletePreset(p.name)} title="Delete preset"
+                            className="shrink-0 text-amber-300/30 opacity-0 transition-opacity hover:text-red-400 group-hover:opacity-100">
+                            <Trash2 className="h-3 w-3" />
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+
               <Separator className="bg-amber-900/30" />
 
               <PanelTitle icon={<Play className="h-4 w-4 text-amber-500" />} title="Animation" />
@@ -531,6 +696,7 @@ export function DungeonViewer() {
                 <ToggleRow label="MST (Skeleton)" color="#ffffff" checked={overlays.mst} onCheckedChange={(v) => setOverlays((o) => ({ ...o, mst: v }))} />
                 <ToggleRow label="Delaunay (proximity)" color="#88aaff" checked={overlays.delaunay} onCheckedChange={(v) => setOverlays((o) => ({ ...o, delaunay: v }))} />
                 <ToggleRow label="Difficulty Heatmap" color="#ffaa00" checked={overlays.difficulty} onCheckedChange={(v) => setOverlays((o) => ({ ...o, difficulty: v }))} />
+                <ToggleRow label="Enemy Patrols" color="#ffcc44" checked={overlays.patrols} onCheckedChange={(v) => setOverlays((o) => ({ ...o, patrols: v }))} />
               </div>
             </div>
           </ScrollArea>
@@ -636,27 +802,49 @@ export function DungeonViewer() {
               <Separator className="bg-amber-900/30" />
 
               <PanelTitle icon={<Sparkles className="h-4 w-4 text-amber-500" />} title="Legend" />
-              <div className="grid grid-cols-2 gap-x-2 gap-y-1.5 text-[11px] text-amber-100/70">
-                <LegendDot color="#6a6258" label="Floor" />
-                <LegendDot color="#2a2620" label="Wall" />
-                <LegendDot color="#ffb24a" label="Torch / Flame" />
-                <LegendDot color="#ff9a3a" label="Brazier" />
-                <LegendDot color="#8a5a2a" label="Chest" />
-                <LegendDot color="#6ad0ff" label="Shrine Crystal" />
-                <LegendDot color="#8aa8ff" label="Entrance Portal" />
-                <LegendDot color="#88ff88" label="Spawn (trash)" />
-                <LegendDot color="#ff5544" label="Spawn (elite)" />
-                <LegendDot color="#ff2222" label="Spawn (boss)" />
-                <LegendDot color="#4060ff" label="Entrance Glow" />
-                <LegendDot color="#ff2a1a" label="Boss Glow" />
-                <LegendDot color="#ff3030" label="Critical Path" />
-                <LegendDot color="#33e0ff" label="Loop Edge" />
+              <div className="space-y-2">
+                <div className="rounded-lg border border-amber-900/20 bg-amber-950/10 p-2">
+                  <div className="mb-1 text-[9px] uppercase tracking-wider text-amber-300/40">Geometry</div>
+                  <div className="grid grid-cols-2 gap-x-2 gap-y-1 text-[11px] text-amber-100/70">
+                    <LegendDot color="#6a6258" label="Floor" />
+                    <LegendDot color="#2a2620" label="Wall" />
+                  </div>
+                </div>
+                <div className="rounded-lg border border-amber-900/20 bg-amber-950/10 p-2">
+                  <div className="mb-1 text-[9px] uppercase tracking-wider text-amber-300/40">Props</div>
+                  <div className="grid grid-cols-2 gap-x-2 gap-y-1 text-[11px] text-amber-100/70">
+                    <LegendDot color="#ffb24a" label="Torch / Flame" />
+                    <LegendDot color="#ff9a3a" label="Brazier" />
+                    <LegendDot color="#8a5a2a" label="Chest" />
+                    <LegendDot color="#6ad0ff" label="Crystal" />
+                    <LegendDot color="#8aa8ff" label="Portal" />
+                  </div>
+                </div>
+                <div className="rounded-lg border border-amber-900/20 bg-amber-950/10 p-2">
+                  <div className="mb-1 text-[9px] uppercase tracking-wider text-amber-300/40">Spawns & Glows</div>
+                  <div className="grid grid-cols-2 gap-x-2 gap-y-1 text-[11px] text-amber-100/70">
+                    <LegendDot color="#88ff88" label="Trash" />
+                    <LegendDot color="#ff5544" label="Elite" />
+                    <LegendDot color="#ff2222" label="Boss" />
+                    <LegendDot color="#4060ff" label="Entrance Glow" />
+                    <LegendDot color="#ff2a1a" label="Boss Glow" />
+                  </div>
+                </div>
+                <div className="rounded-lg border border-amber-900/20 bg-amber-950/10 p-2">
+                  <div className="mb-1 text-[9px] uppercase tracking-wider text-amber-300/40">Overlays</div>
+                  <div className="grid grid-cols-2 gap-x-2 gap-y-1 text-[11px] text-amber-100/70">
+                    <LegendDot color="#ff3030" label="Critical Path" />
+                    <LegendDot color="#33e0ff" label="Loop Edge" />
+                    <LegendDot color="#ffdd33" label="Patrol Route" />
+                  </div>
+                </div>
               </div>
               <p className="pt-1 text-[10px] leading-relaxed text-amber-200/40">
-                Scroll to zoom · drag to pan · click minimap to focus ·
+                Scroll/pinch to zoom · drag to pan · click minimap to focus ·
                 <span className="font-mono text-amber-300/60"> R</span> dice ·
                 <span className="font-mono text-amber-300/60"> E</span> entrance ·
                 <span className="font-mono text-amber-300/60"> B</span> boss ·
+                <span className="font-mono text-amber-300/60"> Q</span>/<span className="font-mono text-amber-300/60">T</span> rotate ·
                 <span className="font-mono text-amber-300/60"> M</span> audio ·
                 <span className="font-mono text-amber-300/60"> Space</span> replay
               </p>
@@ -817,6 +1005,13 @@ function parseHashParams(): Params {
     }
   } catch { /* ignore */ }
   return p;
+}
+
+// ---- Preset type (saved seed configurations) ----
+interface Preset {
+  name: string;
+  params: Params;
+  at: number;
 }
 
 // ---- Ambient atmospheric audio (Web Audio API synth, no asset files) ----

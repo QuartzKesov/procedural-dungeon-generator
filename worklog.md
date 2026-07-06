@@ -118,3 +118,29 @@ Stage Summary:
 - VLM assessment: 8/10 — all new features visible and functional
 - Clean lint, dev server stable on port 3000
 - Next round: could add enemy AI preview paths, more themes, save/load presets, mobile pinch-zoom
+
+---
+Task ID: cron-review-2
+Agent: main (webDevReview cron)
+Task: Periodic QA + add new features (presets, camera rotation, enemy patrols, PNG export, mobile gestures, legend polish)
+
+Work Log:
+- QA baseline: 6/6 tests pass, 9.0ms perf, lint clean, dev server stable
+- Enhancement: save/load seed presets — localStorage-backed presets panel (collapsible). Save current params with a custom name, load with one click, delete with hover trash icon. Persists across sessions. Cap 20 presets.
+- Enhancement: camera rotation — Q/T keys or rotate buttons (top bar) rotate the isometric yaw in 45° increments (0/45/90/135/180/225/270/315°). Pan direction follows yaw so dragging feels correct after rotation. applyCamera reads cameraYaw from state.
+- Enhancement: enemy patrol preview overlay — new "Enemy Patrols" toggle in Debug Overlays. Draws bright yellow triangular routes (spawn → wp1 → wp2 → spawn) per enemy spawn, using deterministic per-spawn waypoint selection. Plus glowing waypoint markers (THREE.Points) at each spawn location. Verified 756 patrol-colored pixels render.
+- Enhancement: PNG export — Export button (top bar) captures the current canvas frame as a PNG download (`dungeon-<seed>-<theme>.png`). Added preserveDrawingBuffer:true to renderer for reliable toDataURL.
+- Enhancement: mobile pinch-zoom — touchstart/touchmove handlers track 2-finger distance, zoom proportionally. Works alongside existing drag-pan (single pointer). Cleanup removes listeners on unmount.
+- Styling: legend redesigned into 4 grouped cards (Geometry / Props / Spawns & Glows / Overlays) with category headers and subtle borders. Much more scannable than the flat 2-column grid.
+- Styling: top bar expanded with rotate-left/rotate-right/export buttons (md:flex, hidden on mobile). Divider separates navigation from utility actions.
+- Updated keyboard shortcuts: Q/T rotate camera, added to help text. Updated legend help text mentions pinch-zoom.
+- Verified end-to-end: 6/6 tests pass, presets save/load to localStorage, camera rotation changes view, patrols overlay renders 756 yellow pixels, export triggers download, mobile responsive with sticky footer.
+- All acceptance tests pass for seeds {1,7,42,1337,99999,123456} and room counts {42,60}. 60-room gen 7.4-10.3ms.
+
+Stage Summary:
+- ALL 6 acceptance tests pass across all tested seeds and room counts
+- 60-room generation: 7-10ms (best of 3), well under 50ms budget
+- New features: save/load presets (localStorage), camera rotation (Q/T, 8 directions), enemy patrol overlay (routes + waypoint markers), PNG export, mobile pinch-zoom, grouped legend cards
+- VLM assessment: 8/10 — presets panel confirmed visible, all buttons present in DOM
+- Clean lint, dev server stable on port 3000
+- Next round: could add room hover/selection inspector, more themes, day/night toggle, minimap viewport indicator, seed history

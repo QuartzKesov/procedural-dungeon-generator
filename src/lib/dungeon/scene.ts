@@ -15,6 +15,7 @@ export interface OverlayToggles {
   loops: boolean;
   critical: boolean;
   difficulty: boolean;
+  patrols: boolean;
 }
 
 export interface BuildOptions {
@@ -610,6 +611,53 @@ export function buildDungeonScene(d: Dungeon, opts: BuildOptions): DungeonScene 
         }
       }
       if (floorMesh.instanceColor) floorMesh.instanceColor.needsUpdate = true;
+    }
+    if (toggles.patrols) {
+      // Enemy patrol preview: for each spawn, draw a small loop route visiting
+      // 2-3 nearby floor cells in the same room. Reads as "where enemies roam".
+      // Uses a deterministic per-spawn RNG so routes are stable across toggles.
+      const pts: number[] = [];
+      for (let si = 0; si < d.spawns.length; si++) {
+        const sp = d.spawns[si];
+        const room = d.rooms[sp.roomId];
+        if (!room) continue;
+        // gather room floor cells (precomputed owner grid)
+        const cells: Array<{ x: number; y: number }> = [];
+        for (let y = Math.max(0, room.cy - room.h); y <= Math.min(H - 1, room.cy + room.h); y++) {
+          for (let x = Math.max(0, room.cx - room.w); x <= Math.min(W - 1, room.cx + room.w); x++) {
+            if (grid[y * W + x] === FLOOR && owner[y * W + x] - 1 === room.id) cells.push({ x, y });
+          }
+        }
+        if (cells.length < 3) continue;
+        // deterministic pick of 3 waypoints (spawn cell + 2 others)
+        const h = (sp.x * 73856093) ^ (sp.y * 19349663) ^ (sp.tier * 83492791);
+        const wp1 = cells[(h >>> 0) % cells.length];
+        const wp2 = cells[((h >>> 8) ^ 0x55) % cells.length];
+        // draw triangle: spawn → wp1 → wp2 → spawn
+        const a = new THREE.Vector3(worldX(sp.x), 0.08, worldZ(sp.y));
+        const b = new THREE.Vector3(worldX(wp1.x), 0.08, worldZ(wp1.y));
+        const c = new THREE.Vector3(worldX(wp2.x), 0.08, worldZ(wp2.y));
+        pts.push(...a.toArray(), ...b.toArray());
+        pts.push(...b.toArray(), ...c.toArray());
+        pts.push(...c.toArray(), ...a.toArray());
+      }
+      // bright yellow patrol routes, fully opaque for visibility
+      makeLine(pts, 0xffdd33, 0.85);
+      // also place small glowing waypoint markers (spheres) at each spawn
+      const markerPts: number[] = [];
+      for (let si = 0; si < d.spawns.length; si++) {
+        const sp = d.spawns[si];
+        markerPts.push(worldX(sp.x), 0.1, worldZ(sp.y));
+      }
+      if (markerPts.length > 0) {
+        const mg = new THREE.BufferGeometry();
+        mg.setAttribute('position', new THREE.Float32BufferAttribute(markerPts, 3));
+        const mm = new THREE.PointsMaterial({
+          color: 0xffdd33, size: 0.5, transparent: true, opacity: 0.9,
+          blending: THREE.AdditiveBlending, depthWrite: false,
+        });
+        overlayGroup.add(new THREE.Points(mg, mm));
+      }
     }
   }
   buildOverlays(currentOverlays);
