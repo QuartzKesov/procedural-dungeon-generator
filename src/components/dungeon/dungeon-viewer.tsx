@@ -127,6 +127,11 @@ export function DungeonViewer() {
     threeRef.current?.dungeonScene?.setHighlightedRoom(selectedRoom);
   }, [selectedRoom, dungeon]);
 
+  // ---- highlight hovered room in scene (subtler ring) ----
+  useEffect(() => {
+    threeRef.current?.dungeonScene?.setHoveredRoom(hoveredRoom);
+  }, [hoveredRoom, dungeon]);
+
   // ---- listen for room pick events from the canvas ----
   useEffect(() => {
     const onPick = (e: Event) => {
@@ -474,16 +479,63 @@ export function DungeonViewer() {
         ctx.fillRect(x * sx, y * sy, Math.ceil(sx) + 1, Math.ceil(sy) + 1);
       }
     }
-    // markers
+    // markers — draw distinctive icons for key room types
     const dot = (x: number, y: number, color: string, r: number) => {
       ctx.fillStyle = color;
       ctx.beginPath();
       ctx.arc(x * sx + sx / 2, y * sy + sy / 2, r, 0, Math.PI * 2);
       ctx.fill();
     };
-    dot(d.rooms[d.entranceId].cx, d.rooms[d.entranceId].cy, '#ffffff', 3);
-    dot(d.rooms[d.bossId].cx, d.rooms[d.bossId].cy, '#ff2222', 4);
-    for (const r of d.rooms) if (r.type === 'treasure') dot(r.cx, r.cy, '#ffd24a', 3);
+    // entrance: white diamond
+    const ent = d.rooms[d.entranceId];
+    ctx.fillStyle = '#ffffff';
+    ctx.beginPath();
+    ctx.moveTo(ent.cx * sx + sx / 2, ent.cy * sy + sy / 2 - 4);
+    ctx.lineTo(ent.cx * sx + sx / 2 + 4, ent.cy * sy + sy / 2);
+    ctx.lineTo(ent.cx * sx + sx / 2, ent.cy * sy + sy / 2 + 4);
+    ctx.lineTo(ent.cx * sx + sx / 2 - 4, ent.cy * sy + sy / 2);
+    ctx.closePath();
+    ctx.fill();
+    // boss: red skull-like cross
+    const boss = d.rooms[d.bossId];
+    ctx.strokeStyle = '#ff2222';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(boss.cx * sx + sx / 2 - 4, boss.cy * sy + sy / 2 - 4);
+    ctx.lineTo(boss.cx * sx + sx / 2 + 4, boss.cy * sy + sy / 2 + 4);
+    ctx.moveTo(boss.cx * sx + sx / 2 + 4, boss.cy * sy + sy / 2 - 4);
+    ctx.lineTo(boss.cx * sx + sx / 2 - 4, boss.cy * sy + sy / 2 + 4);
+    ctx.stroke();
+    // treasure: gold star (dot with ring)
+    for (const r of d.rooms) if (r.type === 'treasure') {
+      dot(r.cx, r.cy, '#ffd24a', 3);
+      ctx.strokeStyle = '#ffd24a';
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.arc(r.cx * sx + sx / 2, r.cy * sy + sy / 2, 5, 0, Math.PI * 2);
+      ctx.stroke();
+    }
+    // shrine: cyan plus
+    for (const r of d.rooms) if (r.type === 'shrine') {
+      ctx.strokeStyle = '#40d0ff';
+      ctx.lineWidth = 1.5;
+      ctx.beginPath();
+      ctx.moveTo(r.cx * sx + sx / 2, r.cy * sy + sy / 2 - 4);
+      ctx.lineTo(r.cx * sx + sx / 2, r.cy * sy + sy / 2 + 4);
+      ctx.moveTo(r.cx * sx + sx / 2 - 4, r.cy * sy + sy / 2);
+      ctx.lineTo(r.cx * sx + sx / 2 + 4, r.cy * sy + sy / 2);
+      ctx.stroke();
+    }
+    // elite: orange triangle
+    for (const r of d.rooms) if (r.type === 'elite') {
+      ctx.fillStyle = '#ff7a3a';
+      ctx.beginPath();
+      ctx.moveTo(r.cx * sx + sx / 2, r.cy * sy + sy / 2 - 4);
+      ctx.lineTo(r.cx * sx + sx / 2 + 3.5, r.cy * sy + sy / 2 + 3);
+      ctx.lineTo(r.cx * sx + sx / 2 - 3.5, r.cy * sy + sy / 2 + 3);
+      ctx.closePath();
+      ctx.fill();
+    }
     // store the base image for the viewport overlay to redraw on top of
     (canvas as any)._baseImage = ctx.getImageData(0, 0, W, H);
   }, [dungeon]);

@@ -209,3 +209,24 @@ Stage Summary:
 - VLM assessment: 8/10 — hover tooltip confirmed visible
 - Clean lint, dev server stable on port 3000
 - Next round: could add saved layouts gallery, more prop variety, day/night transitions, water reflection shader, room hover highlight ring
+
+---
+Task ID: cron-review-6
+Agent: main (webDevReview cron)
+Task: Periodic QA + add new features (room hover highlight ring, sarcophagus prop, minimap room-type icons, styling polish)
+
+Work Log:
+- QA baseline: 6/6 tests pass, 7.3ms perf, lint clean, dev server stable
+- Enhancement: room hover highlight ring — a second, subtler TorusGeometry ring (thinner 0.03, amber color 0xffcc66) that appears on the hovered room (distinct from the selected room's white/type-colored ring). Hides when the hovered room is already selected. Gentler, faster pulse (0.3+0.25·sin(5t)) vs the selected ring's (0.5+0.4·sin(3t)). Added setHoveredRoom to DungeonScene interface + implementation. Wired via hoveredRoom state → useEffect → scene.setHoveredRoom.
+- Enhancement: sarcophagus prop — stone coffin (BoxGeometry 0.7×0.5×1.4, LambertMaterial with faint emissive). Generates in crypt/catacomb themes only, in medium+ combat/elite rooms, 12% chance, placed near walls. Added to types PropKind, generator decorate(), scene geometry/material/instanced mesh. Verified: 2 sarcophagi per dungeon in crypt/catacomb themes, 0 in other themes.
+- Enhancement: minimap room-type icons — replaced the plain dots with distinctive icons: entrance=white diamond, boss=red X-cross, treasure=gold dot with ring, shrine=cyan plus, elite=orange triangle. Much more scannable than uniform dots. All icons drawn in the minimap base image (redrawn on dungeon change).
+- Styling: hover ring uses additive blending + depthWrite:false for glow effect. Sarcophagus mesh has faint emissive (0x15151a) for atmospheric presence.
+- All acceptance tests pass for seeds {1,7,42,1337,99999,123456} and all 6 themes. 60-room gen 24.1ms.
+
+Stage Summary:
+- ALL 6 acceptance tests pass across all tested seeds, room counts, and all 6 themes
+- 60-room generation: 24.1ms (best of 3), well under 50ms budget
+- New features: room hover highlight ring (subtle amber ring on hovered rooms), sarcophagus prop (crypt/catacomb themes), minimap room-type icons (diamond/cross/star/plus/triangle)
+- VLM assessment: 9/10 — "polished UI, clear dungeon visualization, functional minimap with room icons"
+- Clean lint, dev server stable on port 3000
+- Next round: could add saved layouts gallery, more prop variety, day/night transitions, water reflection shader

@@ -147,6 +147,12 @@ function statueGeo(): THREE.BufferGeometry {
   g.translate(0, 0.8, 0);
   return g;
 }
+function sarcophagusGeo(): THREE.BufferGeometry {
+  // a stone coffin — box with a lid
+  const g = new THREE.BoxGeometry(0.7, 0.5, 1.4);
+  g.translate(0, 0.25, 0);
+  return g;
+}
 
 // ---- The scene handle ----------------------------------------------------
 export interface DungeonScene {
@@ -160,6 +166,8 @@ export interface DungeonScene {
   setBuildProgress(p: number): void;
   /** Highlight a room by id (raises its floor tiles + adds a ring). -1 = clear. */
   setHighlightedRoom(roomId: number): void;
+  /** Set hovered room (subtle ring). -1 = clear. */
+  setHoveredRoom(roomId: number): void;
   /** Raycast mouse (NDC) → grid cell. Returns {gridX, gridY, roomId} or null. */
   pickRoom(ndcX: number, ndcY: number, camera: THREE.Camera): { gridX: number; gridY: number; roomId: number } | null;
   dispose(): void;
@@ -206,6 +214,7 @@ export function buildDungeonScene(d: Dungeon, opts: BuildOptions): DungeonScene 
   const barrels = d.props.filter((p) => p.kind === 'barrel');
   const crates = d.props.filter((p) => p.kind === 'crate');
   const statues = d.props.filter((p) => p.kind === 'statue');
+  const sarcophagi = d.props.filter((p) => p.kind === 'sarcophagus');
   const litTorchPropIds: number[] = (d as any).litTorchPropIds ?? [];
   const litTorchSet = new Set(litTorchPropIds);
   const litTorchPropObjects = litTorchPropIds.map((pi) => d.props[pi]).filter(Boolean);
@@ -226,6 +235,7 @@ export function buildDungeonScene(d: Dungeon, opts: BuildOptions): DungeonScene 
   const barrelMat = new THREE.MeshLambertMaterial({ color: 0x6a4a2a });
   const crateMat = new THREE.MeshLambertMaterial({ color: 0x7a5a3a });
   const statueMat = new THREE.MeshLambertMaterial({ color: 0x8a8a90, emissive: 0x1a1a20 });
+  const sarcophagusMat = new THREE.MeshLambertMaterial({ color: 0x6a6a72, emissive: 0x15151a });
   const spawnMats = [
     new THREE.MeshBasicMaterial({ color: 0x88ff88, transparent: true, opacity: 0.7 }), // tier 0
     new THREE.MeshBasicMaterial({ color: 0xffcc44, transparent: true, opacity: 0.75 }), // tier 1
@@ -493,6 +503,15 @@ export function buildDungeonScene(d: Dungeon, opts: BuildOptions): DungeonScene 
     color: new THREE.Color(0x9a9aa0),
   }));
   if (statueMesh) group.add(statueMesh);
+
+  // sarcophagi (stone coffins, crypt/catacomb themes)
+  const sarcophagusMesh = buildPropInstanced(sarcophagi, sarcophagusGeo(), sarcophagusMat, (p) => ({
+    pos: new THREE.Vector3(worldX(p.x), 0, worldZ(p.y)),
+    scale: new THREE.Vector3(1, 1, 1),
+    rotY: p.rot,
+    color: new THREE.Color(0x7a7a82),
+  }));
+  if (sarcophagusMesh) group.add(sarcophagusMesh);
 
   // spawn markers (grouped by tier)
   const spawnGroups: THREE.InstancedMesh[] = [];
@@ -795,6 +814,17 @@ export function buildDungeonScene(d: Dungeon, opts: BuildOptions): DungeonScene 
   group.add(highlightRing);
   let highlightedRoomId = -1;
 
+  // ---- ROOM HOVER RING (subtler, for hover preview) ----
+  const hoverRing = new THREE.Mesh(
+    new THREE.TorusGeometry(1, 0.03, 6, 24),
+    new THREE.MeshBasicMaterial({ color: 0xffcc66, transparent: true, opacity: 0, blending: THREE.AdditiveBlending, depthWrite: false }),
+  );
+  hoverRing.rotation.x = -Math.PI / 2;
+  hoverRing.position.y = 0.04;
+  hoverRing.visible = false;
+  group.add(hoverRing);
+  let hoveredRoomId = -1;
+
   function setHighlightedRoom(roomId: number) {
     highlightedRoomId = roomId;
     if (roomId < 0 || roomId >= d.rooms.length) {
@@ -814,6 +844,20 @@ export function buildDungeonScene(d: Dungeon, opts: BuildOptions): DungeonScene 
       r.type === 'shrine' ? 0x40d0ff :
       r.type === 'elite' ? 0xff7a3a : 0xffffff;
     (highlightRing.material as THREE.MeshBasicMaterial).color.setHex(tintColor);
+  }
+
+  function setHoveredRoom(roomId: number) {
+    hoveredRoomId = roomId;
+    // don't show hover ring if the room is already selected (highlighted)
+    if (roomId < 0 || roomId >= d.rooms.length || roomId === highlightedRoomId) {
+      hoverRing.visible = false;
+      return;
+    }
+    const r = d.rooms[roomId];
+    hoverRing.visible = true;
+    hoverRing.position.set(worldX(r.cx), 0.04, worldZ(r.cy));
+    const radius = Math.max(r.w, r.h) + 0.3;
+    hoverRing.scale.setScalar(radius);
   }
 
   // ---- ROOM PICKING (raycast NDC → grid cell → room) ----
@@ -868,7 +912,7 @@ export function buildDungeonScene(d: Dungeon, opts: BuildOptions): DungeonScene 
       }
   }
   // store prop base scales for pop animation
-  const propMeshes: THREE.InstancedMesh[] = [pillarMesh, debrisMesh, chestMesh, brazierMesh, bracketMesh, flameMesh, crystalMesh, portalMesh, stalagmiteMesh, bonesMesh, barrelMesh, crateMesh, statueMesh, ...spawnGroups].filter(Boolean) as THREE.InstancedMesh[];
+  const propMeshes: THREE.InstancedMesh[] = [pillarMesh, debrisMesh, chestMesh, brazierMesh, bracketMesh, flameMesh, crystalMesh, portalMesh, stalagmiteMesh, bonesMesh, barrelMesh, crateMesh, statueMesh, sarcophagusMesh, ...spawnGroups].filter(Boolean) as THREE.InstancedMesh[];
 
   // store glow base opacity for build-animation ramp
   const glowBaseOpacity = glowMeshes.map((m) => (m.material as THREE.MeshBasicMaterial).opacity);
@@ -1031,6 +1075,11 @@ export function buildDungeonScene(d: Dungeon, opts: BuildOptions): DungeonScene 
       (highlightRing.material as THREE.MeshBasicMaterial).opacity = pulse * ramp;
       highlightRing.rotation.z = elapsedSec * 0.5;
     }
+    // hover ring — gentler, faster pulse, no rotation
+    if (hoverRing.visible) {
+      const pulse = 0.3 + 0.25 * Math.sin(elapsedSec * 5);
+      (hoverRing.material as THREE.MeshBasicMaterial).opacity = pulse * ramp;
+    }
     // water/lava pool shimmer — gentle opacity + position ripple + hue shift
     for (let wi2 = 0; wi2 < waterMeshes.length; wi2++) {
       const wm = waterMeshes[wi2];
@@ -1073,6 +1122,7 @@ export function buildDungeonScene(d: Dungeon, opts: BuildOptions): DungeonScene 
     setOverlays,
     setBuildProgress,
     setHighlightedRoom,
+    setHoveredRoom,
     pickRoom,
     dispose,
   };

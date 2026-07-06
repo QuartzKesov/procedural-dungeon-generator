@@ -750,6 +750,32 @@ function decorate(rng: RNG, dungeon: Dungeon & {
     }
   }
 
+  // ---- Sarcophagi (crypt/catacomb themes, large rooms, rare) ----
+  if (dungeon.params.theme === 'crypt' || dungeon.params.theme === 'catacomb') {
+    for (const rm of rooms) {
+      if (rm.type !== 'combat' && rm.type !== 'elite') continue;
+      if (rm.w * rm.h < 25) continue; // only medium+ rooms
+      if (rng.chance(0.12)) {
+        const avail = roomCells[rm.id].filter((c) => !blocked[c.y * W + c.x]);
+        if (avail.length > 0) {
+          // place near a wall
+          const edgeCells = avail.filter((c) => {
+            for (const [dx, dy] of [[1,0],[-1,0],[0,1],[0,-1]]) {
+              const nx = c.x + dx, ny = c.y + dy;
+              if (nx < 0 || ny < 0 || nx >= W || ny >= H) continue;
+              if (roomOwner[ny * W + nx] - 1 !== rm.id) return true;
+            }
+            return false;
+          });
+          const pool = edgeCells.length > 0 ? edgeCells : avail;
+          const c = pool[rng.int(0, pool.length - 1)];
+          props.push({ kind: 'sarcophagus', x: c.x, y: c.y, rot: rng.pick([0, Math.PI / 2]), scale: 1, roomId: rm.id, flickerPhase: 0 });
+          blocked[c.y * W + c.x] = 1;
+        }
+      }
+    }
+  }
+
   // ---- Braziers ringing the boss arena ----
   const boss = rooms[bossId];
   {
