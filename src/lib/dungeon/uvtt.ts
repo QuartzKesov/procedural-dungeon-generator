@@ -49,6 +49,25 @@ interface UVTTFile {
 
 const PIXELS_PER_GRID = 100;
 
+// Browser canvases have a maximum dimension (~16384px) and memory limit.
+// Foundry VTT's Universal Battlemap Importer also downscales large images,
+// which can fail with "Canvas encoding failed. Dimensions 0x0" if the source
+// image exceeds the browser's canvas allocation limit. We cap the longest
+// side of the exported image at 4096px (Foundry's recommended max) and derive
+// the pixels-per-grid from that.
+const MAX_IMAGE_DIM = 4096;
+
+/**
+ * Compute a safe pixels-per-grid value so that the exported canvas never
+ * exceeds MAX_IMAGE_DIM on either side. For a 128×124 grid this yields
+ * floor(4096/128) = 32px per cell → 4096×3968 image (≈16MP, well within
+ * browser limits). For small grids (e.g. 30×30) it stays at 100px/cell.
+ */
+export function computePPG(d: Dungeon): number {
+  const maxDim = Math.max(d.W, d.H);
+  return Math.max(16, Math.min(PIXELS_PER_GRID, Math.floor(MAX_IMAGE_DIM / maxDim)));
+}
+
 /**
  * Render a top-down map of the dungeon on a canvas.
  * @param includeMarkers If true, draw E/B/T/S markers (for display only, not for Foundry export)
@@ -545,10 +564,9 @@ export function renderTopDownMap(
  * segments, where each segment is an array of points [{x,y},{x,y}].
  * Returns: [ [{x,y},{x,y}], [{x,y},{x,y}], ... ]
  */
-function extractWallSegments(d: Dungeon): Array<Array<{ x: number; y: number }>> {
+function extractWallSegments(d: Dungeon, ppg: number): Array<Array<{ x: number; y: number }>> {
   const { W, H, grid } = d;
   const walls: Array<Array<{ x: number; y: number }>> = [];
-  const ppg = PIXELS_PER_GRID;
 
   // For each WALL cell, emit a wall segment along every edge that borders a
   // FLOOR cell. These are the perimeter walls. Doors live in the open passages
@@ -590,8 +608,7 @@ function extractWallSegments(d: Dungeon): Array<Array<{ x: number; y: number }>>
  *   rot ≈ π/2 → door in a north-south wall (corridor runs east-west) → bounds vertical
  * The `bounds` field (two endpoints) is REQUIRED by Universal Battlemap Importer.
  */
-function extractPortals(d: Dungeon): UVTTPortal[] {
-  const ppg = PIXELS_PER_GRID;
+function extractPortals(d: Dungeon, ppg: number): UVTTPortal[] {
   const portals: UVTTPortal[] = [];
   const doors = d.props.filter((p) => p.kind === 'door');
   for (const door of doors) {
@@ -615,8 +632,7 @@ function extractPortals(d: Dungeon): UVTTPortal[] {
 /**
  * Extract light sources from torches, braziers, chandeliers, crystals.
  */
-function extractLights(d: Dungeon): UVTTLight[] {
-  const ppg = PIXELS_PER_GRID;
+function extractLights(d: Dungeon, ppg: number): UVTTLight[] {
   const lights: UVTTLight[] = [];
   const litTorchPropIds: number[] = (d as any).litTorchPropIds ?? [];
   const litSet = new Set(litTorchPropIds);
@@ -661,16 +677,16 @@ function extractLights(d: Dungeon): UVTTLight[] {
  * No markers, includes props, for Foundry import.
  */
 export function downloadUVTT(d: Dungeon) {
-  const ppg = PIXELS_PER_GRID;
+  const ppg = computePPG(d);
 
   // Render map WITHOUT markers (Foundry doesn't need them)
   const canvas = renderTopDownMap(d, ppg, false, true);
   const dataUrl = canvas.toDataURL('image/png');
-  const base64Image = dataUrl.split(',')[1];
+  const base64Image = dataUrl.split(',')[1] ?? '';
 
-  const los = extractWallSegments(d);
-  const portals = extractPortals(d);
-  const lights = extractLights(d);
+  const los = extractWallSegments(d, ppg);
+  const portals = extractPortals(d, ppg);
+  const lights = extractLights(d, ppg);
 
   const uvtt: UVTTFile = {
     format: 0.3,
@@ -700,7 +716,8 @@ export function downloadUVTT(d: Dungeon) {
  * Export top-down PNG with markers (for display).
  */
 export function downloadTopDownPNG(d: Dungeon) {
-  const canvas = renderTopDownMap(d, PIXELS_PER_GRID, true, true);
+  const ppg = computePPG(d);
+  const canvas = renderTopDownMap(d, ppg, true, true);
   const dataUrl = canvas.toDataURL('image/png');
   const a = document.createElement('a');
   a.href = dataUrl;
@@ -712,7 +729,8 @@ export function downloadTopDownPNG(d: Dungeon) {
  * Export top-down PNG WITHOUT markers and WITH props (for Foundry manual import).
  */
 export function downloadTopDownPNGClean(d: Dungeon) {
-  const canvas = renderTopDownMap(d, PIXELS_PER_GRID, false, true);
+  const ppg = computePPG(d);
+  const canvas = renderTopDownMap(d, ppg, false, true);
   const dataUrl = canvas.toDataURL('image/png');
   const a = document.createElement('a');
   a.href = dataUrl;

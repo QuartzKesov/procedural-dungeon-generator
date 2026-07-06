@@ -948,9 +948,11 @@ function decorate(rng: RNG, dungeon: Dungeon & {
   }
 
   // ---- Doors at doorway cells (grouped + oriented per corridor direction) ----
-  // computeDoorways marks every corridor cell adjacent to a room. A single
-  // corridor mouth can be several cells wide, so we group connected doorway
-  // cells and place ONE door per group, oriented perpendicular to the corridor.
+  // computeDoorways marks every corridor cell adjacent to a room. A corridor
+  // mouth can be several cells wide (corridors are carved at width 2-3), so
+  // we group connected doorway cells and place a door at EVERY cell in the
+  // group — this way the door spans the full passage width (double doors for
+  // a 2-wide passage, triple for 3-wide, etc.).
   {
     const doorSet = new Set(dungeon.doorways.map((dc) => dc.y * W + dc.x));
     const placed = new Set<number>();
@@ -973,27 +975,22 @@ function decorate(rng: RNG, dungeon: Dungeon & {
           queue.push({ x: nx, y: ny });
         }
       }
-      // pick the cell closest to the group centroid
-      let sx = 0, sy = 0;
-      for (const c of group) { sx += c.x; sy += c.y; }
-      const ccx = Math.round(sx / group.length);
-      const ccy = Math.round(sy / group.length);
-      let best = group[0];
-      let bestD = Infinity;
+      // Determine orientation from the group bounding box:
+      //   wider than tall  → passage runs north-south → door slab horizontal (rot=0)
+      //   taller than wide → passage runs east-west   → door slab vertical   (rot=π/2)
+      let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
       for (const c of group) {
-        const dd = (c.x - ccx) * (c.x - ccx) + (c.y - ccy) * (c.y - ccy);
-        if (dd < bestD) { bestD = dd; best = c; }
+        if (c.x < minX) minX = c.x; if (c.x > maxX) maxX = c.x;
+        if (c.y < minY) minY = c.y; if (c.y > maxY) maxY = c.y;
       }
-      // Determine orientation: if a room floor is to the LEFT or RIGHT of the
-      // door cell, the corridor runs east-west → the door blocks E-W passage →
-      // the door slab is vertical (rot = π/2). Otherwise the corridor runs
-      // north-south → door slab is horizontal (rot = 0).
-      const di = best.y * W + best.x;
-      const roomLeft = best.x > 0 && roomOwner[di - 1] > 0;
-      const roomRight = best.x < W - 1 && roomOwner[di + 1] > 0;
-      const rot = (roomLeft || roomRight) ? Math.PI / 2 : 0;
-      props.push({ kind: 'door', x: best.x, y: best.y, rot, scale: 1, roomId: -1, flickerPhase: 0 });
-      blocked[best.y * W + best.x] = 1;
+      const groupW = maxX - minX + 1;
+      const groupH = maxY - minY + 1;
+      const rot = groupW >= groupH ? 0 : Math.PI / 2;
+      // Place a door at every cell in the group to cover the full passage width
+      for (const c of group) {
+        props.push({ kind: 'door', x: c.x, y: c.y, rot, scale: 1, roomId: -1, flickerPhase: 0 });
+        blocked[c.y * W + c.x] = 1;
+      }
     }
   }
 

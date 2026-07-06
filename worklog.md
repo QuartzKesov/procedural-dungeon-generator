@@ -386,3 +386,23 @@ Stage Summary:
 - Editor camera FIXED: edits no longer reset pan/zoom (preserved via signature comparison)
 - New door tool in editor + door/furniture icons in UVTT export
 - All changes verified via agent-browser + VLM (8/10 rendering quality)
+
+---
+Task ID: fix-doors-uvtt-image-v2
+Agent: main
+Task: Fix two remaining issues: (1) doors smaller than passage — only 1 door per group leaves gaps in wide passages; (2) Foundry "Canvas encoding failed. Dimensions 0x0" — exported image too large for browser canvas
+
+Work Log:
+- ROOT CAUSE of "doors smaller than passage": 65 of 77 doorway groups had 2-8 cells (wide passages), but the centroid-only logic placed just 1 door per group. A 3-wide passage got 1 door + 2 open gaps. Fixed by placing a door at EVERY cell in each group. Door count went from 77 → 180 for seed 1337 (covering all 180 doorway cells).
+- Orientation determined from group BOUNDING BOX (more reliable than per-cell): wider-than-tall group → passage runs N-S → slab horizontal (rot=0); taller-than-wide → passage runs E-W → slab vertical (rot=π/2). Result: 97 horizontal + 83 vertical for seed 1337.
+- ROOT CAUSE of "Canvas encoding failed. Dimensions 0x0": grid is 128×124 cells. At 100px/cell = 12800×12400 = 159MP image — exceeds browser canvas memory limit. toDataURL returned empty string → Foundry decoded 0×0 image. Fixed with dynamic `computePPG()`: ppg = max(16, min(100, floor(4096 / max(W,H)))). For 128-wide grid: ppg=32 → 4096×3968 = 16MP image (well within limits).
+- Updated all UVTT functions to accept ppg parameter: extractWallSegments(d, ppg), extractPortals(d, ppg), extractLights(d, ppg), downloadUVTT, downloadTopDownPNG, downloadTopDownPNGClean. Resolution.pixels_per_grid also uses dynamic ppg so Foundry grid alignment stays correct.
+- Improved door 3D geometry: tall slab (0.98 × 2.4 × 0.18) — taller than walls (2.2) so the top pokes above and is always visible from iso view. Bright orange-brown color (0xb8702a with emissive 0x4a2008) for clear visibility against gray walls. Verified: 4802 orange-brown pixels (0.37%) render in zoomed view = ~180 doors visible.
+- Updated addDoor() editor helper to match generator orientation logic (floor on sides → rot=0, else rot=π/2).
+- Verified: 5/5 acceptance tests pass for seeds {1337,42,7,99999}. Lint clean. Image dimensions under 4096px for all tested seeds. Door count 176-180 (covers all doorway cells). Orientation balanced (~50/50 horizontal/vertical).
+
+Stage Summary:
+- Doors now span full passage width: every doorway cell gets a door, wide passages get double/triple doors
+- UVTT image capped at 4096px max dimension (was 12800px = 159MP, now 16MP) — fixes "Dimensions 0x0" crash
+- Door 3D geometry improved: tall bright orange-brown slab visible above walls
+- All 5 acceptance tests pass, lint clean, dev server stable
