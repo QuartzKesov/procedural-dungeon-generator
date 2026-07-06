@@ -230,3 +230,23 @@ Stage Summary:
 - VLM assessment: 9/10 — "polished UI, clear dungeon visualization, functional minimap with room icons"
 - Clean lint, dev server stable on port 3000
 - Next round: could add saved layouts gallery, more prop variety, day/night transitions, water reflection shader
+
+---
+Task ID: cron-review-7
+Agent: main (webDevReview cron)
+Task: Periodic QA + add new features (theme-specific props, smooth day/night transition, styling polish)
+
+Work Log:
+- QA baseline: 6/6 tests pass, 9.1ms perf, lint clean, dev server stable
+- Enhancement: theme-specific props — mushrooms (jungle theme, cluster on room floors, density-scaled, purple-red caps with emissive) and ice crystals (ice theme, elongated octahedrons with additive blending glow, medium+ rooms). Added to types PropKind, generator decorate(), scene geometry/materials/instanced meshes. Ice crystals animate with gentle rotation + opacity shimmer. Verified: 241 mushrooms in jungle, 54 ice crystals in ice theme, 0 in other themes.
+- Enhancement: smooth day/night transition — replaced the instant fog/light switch with an animated 800ms ease-out cubic interpolation. Captures current fog density + hemisphere/directional intensity as "from" values, interpolates to target over time via requestAnimationFrame. Fog density + both light intensities all transition smoothly. Verified: day mode center pixel brightness 70 vs night 50.
+- Styling: ice crystals use additive blending + depthWrite:false for glow. Mushrooms have faint emissive (0x2a0a1a). Ice crystal mesh animates rotation.y + opacity (0.6+0.2·sin(1.5t)).
+- All acceptance tests pass for seeds {1,7,42,1337,99999,123456} and all 6 themes. 60-room gen 21.0ms.
+
+Stage Summary:
+- ALL 6 acceptance tests pass across all tested seeds, room counts, and all 6 themes
+- 60-room generation: 21.0ms (best of 3), well under 50ms budget
+- New features: theme-specific props (mushrooms for jungle, ice crystals for ice), smooth day/night transition animation (800ms ease-out cubic)
+- VLM assessment: 9/10 — "clean and functional, clear 3D visualization, organized panels"
+- Clean lint, dev server stable on port 3000
+- Next round: could add saved layouts gallery, more prop variety, water reflection shader, room list panel

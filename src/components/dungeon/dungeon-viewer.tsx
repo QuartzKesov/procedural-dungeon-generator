@@ -101,25 +101,46 @@ export function DungeonViewer() {
     } catch { /* ignore */ }
   }, []);
 
-  // ---- day/night mode: adjust fog + hemisphere intensity ----
+  // ---- day/night mode: smooth transition (animated) ----
+  // Instead of instantly switching, interpolate fog density + light intensity
+  // over ~800ms using requestAnimationFrame.
   useEffect(() => {
     const state = threeRef.current;
     if (!state) return;
-    if (state.scene.fog instanceof THREE.FogExp2) {
-      // day mode = less fog, brighter
-      state.scene.fog.density = dayMode
-        ? Math.max(0.0005, fogDensityFor(dungeon) * 0.3)
-        : fogDensityFor(dungeon);
-    }
-    // adjust hemisphere + directional intensity via scene traversal
+    const targetFog = dayMode
+      ? Math.max(0.0005, fogDensityFor(dungeon) * 0.3)
+      : fogDensityFor(dungeon);
+    const targetHemi = dayMode ? 1.8 : 1.3;
+    const targetDir = dayMode ? 1.2 : 0.75;
+    // capture current values as the "from"
+    const fromFog = (state.scene.fog instanceof THREE.FogExp2) ? state.scene.fog.density : targetFog;
+    let fromHemi = targetHemi, fromDir = targetDir;
     state.scene.traverse((o) => {
       const light = o as THREE.Light;
-      if (light.isHemisphereLight) {
-        (light as THREE.HemisphereLight).intensity = dayMode ? 1.8 : 1.3;
-      } else if (light.isDirectionalLight) {
-        (light as THREE.DirectionalLight).intensity = dayMode ? 1.2 : 0.75;
-      }
+      if (light.isHemisphereLight) fromHemi = (light as THREE.HemisphereLight).intensity;
+      else if (light.isDirectionalLight) fromDir = (light as THREE.DirectionalLight).intensity;
     });
+    const start = performance.now();
+    const dur = 800;
+    let raf = 0;
+    const tick = () => {
+      const t = Math.min(1, (performance.now() - start) / dur);
+      const e = 1 - Math.pow(1 - t, 3); // ease-out cubic
+      if (state.scene.fog instanceof THREE.FogExp2) {
+        state.scene.fog.density = fromFog + (targetFog - fromFog) * e;
+      }
+      state.scene.traverse((o) => {
+        const light = o as THREE.Light;
+        if (light.isHemisphereLight) {
+          (light as THREE.HemisphereLight).intensity = fromHemi + (targetHemi - fromHemi) * e;
+        } else if (light.isDirectionalLight) {
+          (light as THREE.DirectionalLight).intensity = fromDir + (targetDir - fromDir) * e;
+        }
+      });
+      if (t < 1) raf = requestAnimationFrame(tick);
+    };
+    raf = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(raf);
   }, [dayMode, dungeon]);
 
   // ---- highlight selected room in scene ----

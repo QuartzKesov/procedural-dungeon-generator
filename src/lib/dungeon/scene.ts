@@ -153,6 +153,31 @@ function sarcophagusGeo(): THREE.BufferGeometry {
   g.translate(0, 0.25, 0);
   return g;
 }
+function mushroomGeo(): THREE.BufferGeometry {
+  // a mushroom — stem + cap (merged into one geometry via group-like offset)
+  const stem = new THREE.CylinderGeometry(0.06, 0.08, 0.3, 6);
+  stem.translate(0, 0.15, 0);
+  const cap = new THREE.SphereGeometry(0.18, 8, 6, 0, Math.PI * 2, 0, Math.PI / 2);
+  cap.translate(0, 0.3, 0);
+  // merge manually (Three.js r185 doesn't have BufferGeometryUtils.mergeBufferGeometries easily)
+  // use a simple approach: create a single geometry with both
+  const merged = new THREE.BufferGeometry();
+  const stemPos = stem.attributes.position.array;
+  const capPos = cap.attributes.position.array;
+  const combined = new Float32Array(stemPos.length + capPos.length);
+  combined.set(stemPos, 0);
+  combined.set(capPos, stemPos.length);
+  merged.setAttribute('position', new THREE.BufferAttribute(combined, 3));
+  merged.computeVertexNormals();
+  return merged;
+}
+function icecrystalGeo(): THREE.BufferGeometry {
+  // an ice crystal — elongated octahedron
+  const g = new THREE.OctahedronGeometry(0.35, 0);
+  g.scale(0.7, 1.6, 0.7);
+  g.translate(0, 0.5, 0);
+  return g;
+}
 
 // ---- The scene handle ----------------------------------------------------
 export interface DungeonScene {
@@ -215,6 +240,8 @@ export function buildDungeonScene(d: Dungeon, opts: BuildOptions): DungeonScene 
   const crates = d.props.filter((p) => p.kind === 'crate');
   const statues = d.props.filter((p) => p.kind === 'statue');
   const sarcophagi = d.props.filter((p) => p.kind === 'sarcophagus');
+  const mushrooms = d.props.filter((p) => p.kind === 'mushroom');
+  const icecrystals = d.props.filter((p) => p.kind === 'icecrystal');
   const litTorchPropIds: number[] = (d as any).litTorchPropIds ?? [];
   const litTorchSet = new Set(litTorchPropIds);
   const litTorchPropObjects = litTorchPropIds.map((pi) => d.props[pi]).filter(Boolean);
@@ -236,6 +263,8 @@ export function buildDungeonScene(d: Dungeon, opts: BuildOptions): DungeonScene 
   const crateMat = new THREE.MeshLambertMaterial({ color: 0x7a5a3a });
   const statueMat = new THREE.MeshLambertMaterial({ color: 0x8a8a90, emissive: 0x1a1a20 });
   const sarcophagusMat = new THREE.MeshLambertMaterial({ color: 0x6a6a72, emissive: 0x15151a });
+  const mushroomMat = new THREE.MeshLambertMaterial({ color: 0x8a4a6a, emissive: 0x2a0a1a });
+  const icecrystalMat = new THREE.MeshBasicMaterial({ color: 0xaaddff, transparent: true, opacity: 0.75, blending: THREE.AdditiveBlending, depthWrite: false });
   const spawnMats = [
     new THREE.MeshBasicMaterial({ color: 0x88ff88, transparent: true, opacity: 0.7 }), // tier 0
     new THREE.MeshBasicMaterial({ color: 0xffcc44, transparent: true, opacity: 0.75 }), // tier 1
@@ -512,6 +541,24 @@ export function buildDungeonScene(d: Dungeon, opts: BuildOptions): DungeonScene 
     color: new THREE.Color(0x7a7a82),
   }));
   if (sarcophagusMesh) group.add(sarcophagusMesh);
+
+  // mushrooms (jungle theme)
+  const mushroomMesh = buildPropInstanced(mushrooms, mushroomGeo(), mushroomMat, (p) => ({
+    pos: new THREE.Vector3(worldX(p.x), 0, worldZ(p.y)),
+    scale: new THREE.Vector3(p.scale, p.scale, p.scale),
+    rotY: p.rot,
+    color: new THREE.Color(0x9a5a7a),
+  }));
+  if (mushroomMesh) group.add(mushroomMesh);
+
+  // ice crystals (ice theme, additive glow)
+  const icecrystalMesh = buildPropInstanced(icecrystals, icecrystalGeo(), icecrystalMat, (p) => ({
+    pos: new THREE.Vector3(worldX(p.x), 0, worldZ(p.y)),
+    scale: new THREE.Vector3(p.scale, p.scale, p.scale),
+    rotY: p.rot,
+    color: new THREE.Color(0xaaddff),
+  }));
+  if (icecrystalMesh) group.add(icecrystalMesh);
 
   // spawn markers (grouped by tier)
   const spawnGroups: THREE.InstancedMesh[] = [];
@@ -912,7 +959,7 @@ export function buildDungeonScene(d: Dungeon, opts: BuildOptions): DungeonScene 
       }
   }
   // store prop base scales for pop animation
-  const propMeshes: THREE.InstancedMesh[] = [pillarMesh, debrisMesh, chestMesh, brazierMesh, bracketMesh, flameMesh, crystalMesh, portalMesh, stalagmiteMesh, bonesMesh, barrelMesh, crateMesh, statueMesh, sarcophagusMesh, ...spawnGroups].filter(Boolean) as THREE.InstancedMesh[];
+  const propMeshes: THREE.InstancedMesh[] = [pillarMesh, debrisMesh, chestMesh, brazierMesh, bracketMesh, flameMesh, crystalMesh, portalMesh, stalagmiteMesh, bonesMesh, barrelMesh, crateMesh, statueMesh, sarcophagusMesh, mushroomMesh, icecrystalMesh, ...spawnGroups].filter(Boolean) as THREE.InstancedMesh[];
 
   // store glow base opacity for build-animation ramp
   const glowBaseOpacity = glowMeshes.map((m) => (m.material as THREE.MeshBasicMaterial).opacity);
@@ -1020,6 +1067,11 @@ export function buildDungeonScene(d: Dungeon, opts: BuildOptions): DungeonScene 
     if (portalMesh) {
       portalMesh.rotation.z = elapsedSec * 0.4;
       portalMesh.scale.y = 1 + 0.06 * Math.sin(elapsedSec * 2.2);
+    }
+    // ice crystals gentle rotation + opacity shimmer
+    if (icecrystalMesh) {
+      icecrystalMesh.rotation.y = elapsedSec * 0.3;
+      (icecrystalMesh.material as THREE.MeshBasicMaterial).opacity = 0.6 + 0.2 * Math.sin(elapsedSec * 1.5);
     }
     // glow pulse (slow breath on key-room glows)
     for (let gi = 0; gi < glowMeshes.length; gi++) {

@@ -776,6 +776,37 @@ function decorate(rng: RNG, dungeon: Dungeon & {
     }
   }
 
+  // ---- Mushrooms (jungle theme, clusters on room floors) ----
+  if (dungeon.params.theme === 'jungle') {
+    for (const rm of rooms) {
+      if (rm.type === 'entrance' || rm.type === 'boss') continue;
+      const density = dungeon.params.decorDensity * 0.08;
+      for (const cell of roomCells[rm.id]) {
+        if (blocked[cell.y * W + cell.x]) continue;
+        if (rng.float() < density) {
+          props.push({ kind: 'mushroom', x: cell.x, y: cell.y, rot: rng.range(0, Math.PI * 2), scale: rng.range(0.5, 1.0), roomId: rm.id, flickerPhase: 0 });
+          blocked[cell.y * W + cell.x] = 1;
+        }
+      }
+    }
+  }
+
+  // ---- Ice crystals (ice theme, clusters like stalagmites) ----
+  if (dungeon.params.theme === 'ice') {
+    for (const rm of rooms) {
+      if (rm.type === 'entrance' || rm.type === 'boss' || rm.type === 'treasure') continue;
+      if (rm.w * rm.h < 15) continue;
+      const count = Math.floor(rm.cells / 35 * dungeon.params.decorDensity);
+      const avail = roomCells[rm.id].filter((c) => !blocked[c.y * W + c.x]);
+      for (let i = avail.length - 1; i > 0; i--) { const j = rng.int(0, i); [avail[i], avail[j]] = [avail[j], avail[i]]; }
+      for (let k = 0; k < Math.min(count, avail.length); k++) {
+        const c = avail[k];
+        props.push({ kind: 'icecrystal', x: c.x, y: c.y, rot: rng.range(0, Math.PI * 2), scale: rng.range(0.7, 1.3), roomId: rm.id, flickerPhase: rng.range(0, Math.PI * 2) });
+        blocked[c.y * W + c.x] = 1;
+      }
+    }
+  }
+
   // ---- Braziers ringing the boss arena ----
   const boss = rooms[bossId];
   {

@@ -74,7 +74,9 @@ export type PropKind =
   | 'barrel'
   | 'crate'
   | 'statue'
-  | 'sarcophagus';
+  | 'sarcophagus'
+  | 'mushroom'
+  | 'icecrystal';
 
 export interface Prop {
   kind: PropKind;
