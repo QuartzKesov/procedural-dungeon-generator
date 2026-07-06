@@ -1002,11 +1002,24 @@ export function DungeonViewer() {
                   width={220}
                   height={186}
                   onClick={onMinimapClick}
+                  onWheel={(e) => {
+                    e.preventDefault();
+                    const state = threeRef.current;
+                    if (!state) return;
+                    const factor = e.deltaY > 0 ? 1.1 : 1 / 1.1;
+                    state.zoom = Math.max(0.4, Math.min(3.5, state.zoom * factor));
+                    const container = containerRef.current!;
+                    const aspect = container.clientWidth / container.clientHeight;
+                    const half = (dungeon.W + dungeon.H) * 0.42 / state.zoom;
+                    state.camera.left = -half * aspect; state.camera.right = half * aspect;
+                    state.camera.top = half; state.camera.bottom = -half;
+                    state.camera.updateProjectionMatrix();
+                  }}
                   className="h-auto w-full cursor-crosshair"
-                  title="Click to focus camera"
+                  title="Click to focus · scroll to zoom"
                 />
                 <div className="pointer-events-none absolute right-3 top-3 rounded bg-black/70 px-1.5 py-0.5 text-[9px] text-amber-300/50 opacity-0 transition-opacity group-hover:opacity-100">
-                  click to focus
+                  click to focus · scroll to zoom
                 </div>
               </div>
               {/* quick-nav buttons */}

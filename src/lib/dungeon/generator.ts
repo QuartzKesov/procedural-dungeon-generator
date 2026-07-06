@@ -837,6 +837,26 @@ function decorate(rng: RNG, dungeon: Dungeon & {
     }
   }
 
+  // ---- Banners (wall-hung flags in large rooms, boss/elite) ----
+  for (const rm of rooms) {
+    if (rm.type !== 'boss' && rm.type !== 'elite') continue;
+    if (rm.w * rm.h < 25) continue;
+    // find a wall cell on the room's edge
+    const candidates: Cell[] = [];
+    for (let dy = -rm.h; dy <= rm.h; dy++) {
+      for (let dx = -rm.w; dx <= rm.w; dx++) {
+        if (Math.abs(dx) !== rm.w && Math.abs(dy) !== rm.h) continue; // edge only
+        const x = rm.cx + dx, y = rm.cy + dy;
+        if (x < 0 || y < 0 || x >= W || y >= H) continue;
+        if (grid[y * W + x] === WALL) candidates.push({ x, y });
+      }
+    }
+    if (candidates.length > 0) {
+      const c = candidates[rng.int(0, candidates.length - 1)];
+      props.push({ kind: 'banner', x: c.x, y: c.y, rot: 0, scale: 1, roomId: rm.id, flickerPhase: 0 });
+    }
+  }
+
   // ---- Braziers ringing the boss arena ----
   const boss = rooms[bossId];
   {

@@ -78,7 +78,8 @@ export type PropKind =
   | 'mushroom'
   | 'icecrystal'
   | 'chandelier'
-  | 'cobweb';
+  | 'cobweb'
+  | 'banner';
 
 export interface Prop {
   kind: PropKind;

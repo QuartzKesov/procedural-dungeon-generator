@@ -294,3 +294,22 @@ Stage Summary:
 - VLM assessment: 8/10 — "well-structured interface, clear visibility"
 - Clean lint, dev server stable on port 3000
 - Next round: could add saved layouts gallery, water reflection shader, minimap zoom, more themes
+
+---
+Task ID: cron-review-10
+Agent: main (webDevReview cron)
+Task: Periodic QA + add new features (minimap zoom, banner prop, styling polish)
+
+Work Log:
+- QA baseline: 6/6 tests pass, 7.3ms perf, lint clean, dev server stable
+- Enhancement: minimap zoom — scrolling on the minimap canvas now zooms the 3D view (previously only the main canvas handled wheel). React onWheel handler adjusts state.zoom + updates camera frustum. Updated tooltip to "click to focus · scroll to zoom".
+- Enhancement: banner prop — wall-hung flags (PlaneGeometry, DoubleSide, dark red LambertMaterial with emissive) placed on edge wall cells of boss/elite rooms (medium+ size). Added to types PropKind, generator decorate(), scene geometry/material/instanced mesh. Verified: 2 banners per dungeon (boss + elite rooms). Added 'banner' to wall-allowed test list.
+- All acceptance tests pass for seeds {1,7,42,1337,99999,123456} and all 6 themes. 60-room gen 7.2ms.
+
+Stage Summary:
+- ALL 6 acceptance tests pass across all tested seeds, room counts, and all 6 themes
+- 60-room generation: 7.2ms (best of 3), well under 50ms budget
+- New features: minimap scroll-to-zoom, banner prop (wall flags in boss/elite rooms)
+- VLM assessment: 8/10 — "clear and functional"
+- Clean lint, dev server stable on port 3000
+- Next round: could add saved layouts gallery, water reflection shader, more themes, minimap zoom indicator
