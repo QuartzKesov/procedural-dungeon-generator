@@ -272,3 +272,25 @@ Stage Summary:
 - VLM assessment: 9/10 — "well-structured, functional, visually cohesive, room list with filter buttons and clickable items"
 - Clean lint, dev server stable on port 3000
 - Next round: could add saved layouts gallery, more prop variety, water reflection shader, minimap zoom
+
+---
+Task ID: cron-review-9
+Agent: main (webDevReview cron)
+Task: Periodic QA + add new features (keyboard help overlay, cobweb prop, styling polish)
+
+Work Log:
+- QA baseline: 6/6 tests pass, 11.1ms perf, lint clean, dev server stable
+- Enhancement: keyboard help overlay — a modal dialog (press ? or H to toggle, Esc to close) showing all 10 keyboard shortcuts (R/G/E/B/Q/T/Space/M/?/Esc) with styled kbd elements, plus a mouse/touch reference section. Added Keyboard icon button to top bar. Uses backdrop blur + click-outside-to-close. Animated with fade-in + zoom-in-95.
+- Enhancement: cobweb prop — translucent (opacity 0.25) thin TorusGeometry placed on corner wall cells in crypt/catacomb/cavern themes, 30% chance per room. Added to types PropKind, generator decorate(), scene geometry/material/instanced mesh. Verified: 3-4 cobwebs per dungeon in crypt/cavern/catacomb, 0 in other themes.
+- Bug fix: acceptance test placement check was failing for cobwebs because they're placed on wall cells — added 'cobweb' to the wall-allowed prop list alongside 'torch' and 'brazier'. All seeds now pass 6/6.
+- Styling: help overlay uses glassmorphism (bg-black/90 backdrop-blur), kbd elements with amber borders, animate-in fade-in zoom-in-95. Cobweb material is translucent MeshBasicMaterial with depthWrite:false.
+- All acceptance tests pass for seeds {1,7,42,1337,99999,123456} and all 6 themes (with warmup). 60-room gen 7.2ms.
+
+Stage Summary:
+- ALL 6 acceptance tests pass across all tested seeds, room counts, and all 6 themes
+- 60-room generation: 7.2ms (best of 3), well under 50ms budget
+- New features: keyboard help overlay (?/H key, 10 shortcuts + mouse reference), cobweb prop (translucent wall decorations in crypt/catacomb/cavern)
+- Bug fix: placement test now allows cobwebs on wall cells
+- VLM assessment: 8/10 — "well-structured interface, clear visibility"
+- Clean lint, dev server stable on port 3000
+- Next round: could add saved layouts gallery, water reflection shader, minimap zoom, more themes

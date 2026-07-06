@@ -93,11 +93,11 @@ function placement(d: Dungeon): { pass: boolean; detail: string } {
   };
   for (const p of d.props) checkCell(p.x, p.y);
   for (const s of d.spawns) checkCell(s.x, s.y);
-  // torches/braziers legitimately sit ON wall cells — re-allow wall for those.
+  // torches/braziers/cobwebs legitimately sit ON wall cells — re-allow wall for those.
   // Count those back out:
   let wallOk = 0;
   for (const p of d.props) {
-    if ((p.kind === 'torch' || p.kind === 'brazier') && p.x >= 0 && p.y >= 0 && p.x < d.W && p.y < d.H) {
+    if ((p.kind === 'torch' || p.kind === 'brazier' || p.kind === 'cobweb') && p.x >= 0 && p.y >= 0 && p.x < d.W && p.y < d.H) {
       if (d.grid[p.y * d.W + p.x] === WALL) wallOk++;
     }
   }

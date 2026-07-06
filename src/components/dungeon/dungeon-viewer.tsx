@@ -21,7 +21,7 @@ import {
   Dices, Play, RefreshCw, FlaskConical, Eye, EyeOff, Map as MapIcon, Layers, Zap,
   Link2, Volume2, VolumeX, Crosshair, Skull, DoorOpen, Sparkles,
   Save, Bookmark, Trash2, Download, RotateCw, Route,
-  Sun, Moon, History, X, Info, List,
+  Sun, Moon, History, X, Info, List, Keyboard,
 } from 'lucide-react';
 
 interface ThreeState {
@@ -74,6 +74,7 @@ export function DungeonViewer() {
   const [seedHistory, setSeedHistory] = useState<number[]>([]);
   const [showRoomList, setShowRoomList] = useState(false);
   const [roomListFilter, setRoomListFilter] = useState<string>('all');
+  const [showHelp, setShowHelp] = useState(false);
 
   // Generate the dungeon whenever params change. Fast (~25ms) → synchronous.
   const dungeon = useMemo<Dungeon>(() => generateDungeon(params), [params]);
@@ -741,6 +742,8 @@ export function DungeonViewer() {
       else if (e.key === 'm' || e.key === 'M') toggleAudio();
       else if (e.key === 'q' || e.key === 'Q') rotateCamera(-1);
       else if (e.key === 't' || e.key === 'T') rotateCamera(1);
+      else if (e.key === '?' || e.key === 'h' || e.key === 'H') { e.preventDefault(); setShowHelp((v) => !v); }
+      else if (e.key === 'Escape') { setShowHelp(false); setSelectedRoom(-1); }
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
@@ -826,8 +829,18 @@ export function DungeonViewer() {
           >
             {dayMode ? <Sun className="h-3.5 w-3.5" /> : <Moon className="h-3.5 w-3.5" />}
           </button>
+          <button
+            onClick={() => setShowHelp(true)}
+            title="Keyboard shortcuts (?)"
+            className="pointer-events-auto flex h-7 w-7 items-center justify-center rounded-full border border-amber-800/40 bg-amber-950/20 text-amber-300/70 transition-colors hover:bg-amber-900/40 hover:text-amber-100"
+          >
+            <Keyboard className="h-3.5 w-3.5" />
+          </button>
         </div>
       </header>
+
+      {/* Keyboard help overlay */}
+      {showHelp && <HelpOverlay onClose={() => setShowHelp(false)} />}
 
       {/* Panel toggle buttons (mobile-friendly) */}
       <div className="absolute left-3 top-16 z-30 flex flex-col gap-2">
@@ -1216,6 +1229,60 @@ export function DungeonViewer() {
           </span>
         </div>
       </footer>
+    </div>
+  );
+}
+
+// ---- Keyboard Help Overlay (modal showing all shortcuts) ----
+function HelpOverlay({ onClose }: { onClose: () => void }) {
+  const shortcuts: Array<{ key: string; desc: string }> = [
+    { key: 'R', desc: 'Roll random seed (dice)' },
+    { key: 'G', desc: 'Regenerate dungeon' },
+    { key: 'E', desc: 'Focus camera on entrance' },
+    { key: 'B', desc: 'Focus camera on boss' },
+    { key: 'Q', desc: 'Rotate camera left (45°)' },
+    { key: 'T', desc: 'Rotate camera right (45°)' },
+    { key: 'Space', desc: 'Replay staged build animation' },
+    { key: 'M', desc: 'Toggle ambient audio' },
+    { key: '?', desc: 'Toggle this help overlay' },
+    { key: 'Esc', desc: 'Close help / deselect room' },
+  ];
+  return (
+    <div
+      className="fixed inset-0 z-[100] flex items-center justify-center bg-black/70 backdrop-blur-sm"
+      onClick={onClose}
+    >
+      <div
+        className="pointer-events-auto w-[min(28rem,calc(100vw-2rem))] animate-in fade-in zoom-in-95 duration-200"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="rounded-2xl border border-amber-800/50 bg-black/90 p-6 shadow-2xl backdrop-blur-md">
+          <div className="mb-4 flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <Keyboard className="h-5 w-5 text-amber-500" />
+              <h2 className="font-serif text-base text-amber-100">Keyboard Shortcuts</h2>
+            </div>
+            <button onClick={onClose} className="text-amber-300/50 hover:text-amber-100">
+              <X className="h-5 w-5" />
+            </button>
+          </div>
+          <div className="space-y-1.5">
+            {shortcuts.map((s) => (
+              <div key={s.key} className="flex items-center gap-3 rounded-lg border border-amber-900/20 bg-amber-950/10 px-3 py-2">
+                <kbd className="inline-flex h-7 min-w-7 items-center justify-center rounded border border-amber-700/50 bg-amber-900/30 px-1.5 font-mono text-xs text-amber-200">
+                  {s.key}
+                </kbd>
+                <span className="text-sm text-amber-100/70">{s.desc}</span>
+              </div>
+            ))}
+          </div>
+          <div className="mt-4 rounded-lg border border-amber-900/20 bg-amber-950/10 p-3 text-[11px] text-amber-200/40">
+            <div className="mb-1 font-mono text-[9px] uppercase tracking-wider text-amber-300/40">Mouse / Touch</div>
+            <div>Scroll / pinch — zoom · Drag — pan · Click room — inspect · Click minimap — focus camera</div>
+          </div>
+          <p className="mt-3 text-center text-[10px] text-amber-300/30">Press <kbd className="font-mono">?</kbd> or <kbd className="font-mono">Esc</kbd> to close</p>
+        </div>
+      </div>
     </div>
   );
 }

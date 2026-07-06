@@ -196,6 +196,12 @@ function chandelierGeo(): THREE.BufferGeometry {
   merged.computeVertexNormals();
   return merged;
 }
+function cobwebGeo(): THREE.BufferGeometry {
+  // a cobweb — a flat ring with thin spokes (simplified as a thin torus)
+  const g = new THREE.TorusGeometry(0.4, 0.02, 4, 8);
+  g.translate(0, 1.5, 0);
+  return g;
+}
 
 // ---- The scene handle ----------------------------------------------------
 export interface DungeonScene {
@@ -261,6 +267,7 @@ export function buildDungeonScene(d: Dungeon, opts: BuildOptions): DungeonScene 
   const mushrooms = d.props.filter((p) => p.kind === 'mushroom');
   const icecrystals = d.props.filter((p) => p.kind === 'icecrystal');
   const chandeliers = d.props.filter((p) => p.kind === 'chandelier');
+  const cobwebs = d.props.filter((p) => p.kind === 'cobweb');
   const litTorchPropIds: number[] = (d as any).litTorchPropIds ?? [];
   const litTorchSet = new Set(litTorchPropIds);
   const litTorchPropObjects = litTorchPropIds.map((pi) => d.props[pi]).filter(Boolean);
@@ -285,6 +292,7 @@ export function buildDungeonScene(d: Dungeon, opts: BuildOptions): DungeonScene 
   const mushroomMat = new THREE.MeshLambertMaterial({ color: 0x8a4a6a, emissive: 0x2a0a1a });
   const icecrystalMat = new THREE.MeshBasicMaterial({ color: 0xaaddff, transparent: true, opacity: 0.75, blending: THREE.AdditiveBlending, depthWrite: false });
   const chandelierMat = new THREE.MeshLambertMaterial({ color: 0x4a3a2a, emissive: 0x2a1a0a });
+  const cobwebMat = new THREE.MeshBasicMaterial({ color: 0xccccdd, transparent: true, opacity: 0.25, depthWrite: false });
   const spawnMats = [
     new THREE.MeshBasicMaterial({ color: 0x88ff88, transparent: true, opacity: 0.7 }), // tier 0
     new THREE.MeshBasicMaterial({ color: 0xffcc44, transparent: true, opacity: 0.75 }), // tier 1
@@ -596,6 +604,15 @@ export function buildDungeonScene(d: Dungeon, opts: BuildOptions): DungeonScene 
     group.add(light);
     chandelierLights.push(light);
   }
+
+  // cobwebs (translucent corner decorations)
+  const cobwebMesh = buildPropInstanced(cobwebs, cobwebGeo(), cobwebMat, (p) => ({
+    pos: new THREE.Vector3(worldX(p.x), 0, worldZ(p.y)),
+    scale: new THREE.Vector3(p.scale, p.scale, p.scale),
+    rotY: p.rot,
+    color: new THREE.Color(0xccccdd),
+  }));
+  if (cobwebMesh) group.add(cobwebMesh);
 
   // spawn markers (grouped by tier)
   const spawnGroups: THREE.InstancedMesh[] = [];
@@ -996,7 +1013,7 @@ export function buildDungeonScene(d: Dungeon, opts: BuildOptions): DungeonScene 
       }
   }
   // store prop base scales for pop animation
-  const propMeshes: THREE.InstancedMesh[] = [pillarMesh, debrisMesh, chestMesh, brazierMesh, bracketMesh, flameMesh, crystalMesh, portalMesh, stalagmiteMesh, bonesMesh, barrelMesh, crateMesh, statueMesh, sarcophagusMesh, mushroomMesh, icecrystalMesh, chandelierMesh, ...spawnGroups].filter(Boolean) as THREE.InstancedMesh[];
+  const propMeshes: THREE.InstancedMesh[] = [pillarMesh, debrisMesh, chestMesh, brazierMesh, bracketMesh, flameMesh, crystalMesh, portalMesh, stalagmiteMesh, bonesMesh, barrelMesh, crateMesh, statueMesh, sarcophagusMesh, mushroomMesh, icecrystalMesh, chandelierMesh, cobwebMesh, ...spawnGroups].filter(Boolean) as THREE.InstancedMesh[];
 
   // store glow base opacity for build-animation ramp
   const glowBaseOpacity = glowMeshes.map((m) => (m.material as THREE.MeshBasicMaterial).opacity);

@@ -815,6 +815,28 @@ function decorate(rng: RNG, dungeon: Dungeon & {
     props.push({ kind: 'chandelier', x: rm.cx, y: rm.cy, rot: 0, scale: 1, roomId: rm.id, flickerPhase: rng.range(0, Math.PI * 2) });
   }
 
+  // ---- Cobwebs (corner wall cells, crypt/catacomb/cavern themes) ----
+  if (dungeon.params.theme === 'crypt' || dungeon.params.theme === 'catacomb' || dungeon.params.theme === 'cavern') {
+    for (const rm of rooms) {
+      if (rm.type === 'entrance' || rm.type === 'boss') continue;
+      if (rng.chance(0.3)) {
+        // find a corner wall cell of this room
+        const candidates: Cell[] = [];
+        for (let dy = -rm.h; dy <= rm.h; dy += rm.h) {
+          for (let dx = -rm.w; dx <= rm.w; dx += rm.w) {
+            const x = rm.cx + dx, y = rm.cy + dy;
+            if (x < 0 || y < 0 || x >= W || y >= H) continue;
+            if (grid[y * W + x] === WALL) candidates.push({ x, y });
+          }
+        }
+        if (candidates.length > 0) {
+          const c = candidates[rng.int(0, candidates.length - 1)];
+          props.push({ kind: 'cobweb', x: c.x, y: c.y, rot: rng.range(0, Math.PI * 2), scale: rng.range(0.8, 1.3), roomId: rm.id, flickerPhase: 0 });
+        }
+      }
+    }
+  }
+
   // ---- Braziers ringing the boss arena ----
   const boss = rooms[bossId];
   {
