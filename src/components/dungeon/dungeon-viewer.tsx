@@ -21,6 +21,7 @@ import {
   Dices, Play, RefreshCw, FlaskConical, Eye, EyeOff, Map as MapIcon, Layers, Zap,
   Link2, Volume2, VolumeX, Crosshair, Skull, DoorOpen, Sparkles,
   Save, Bookmark, Trash2, Download, RotateCw, Route,
+  Sun, Moon, History, X, Info,
 } from 'lucide-react';
 
 interface ThreeState {
@@ -64,6 +65,9 @@ export function DungeonViewer() {
   const [presets, setPresets] = useState<Preset[]>([]);
   const [presetName, setPresetName] = useState('');
   const [showPresets, setShowPresets] = useState(false);
+  const [selectedRoom, setSelectedRoom] = useState<number>(-1);
+  const [dayMode, setDayMode] = useState(false);
+  const [seedHistory, setSeedHistory] = useState<number[]>([]);
 
   // Generate the dungeon whenever params change. Fast (~25ms) → synchronous.
   const dungeon = useMemo<Dungeon>(() => generateDungeon(params), [params]);
@@ -76,6 +80,58 @@ export function DungeonViewer() {
       window.history.replaceState(null, '', hash);
     }
   }, [params]);
+
+  // ---- track seed history (recent 10 unique seeds) ----
+  useEffect(() => {
+    setSeedHistory((prev) => {
+      const next = [params.seed, ...prev.filter((s) => s !== params.seed)].slice(0, 10);
+      try { localStorage.setItem('dungeon-seed-history', JSON.stringify(next)); } catch {}
+      return next;
+    });
+  }, [params.seed]);
+  // load seed history on mount
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem('dungeon-seed-history');
+      if (raw) setSeedHistory(JSON.parse(raw));
+    } catch { /* ignore */ }
+  }, []);
+
+  // ---- day/night mode: adjust fog + hemisphere intensity ----
+  useEffect(() => {
+    const state = threeRef.current;
+    if (!state) return;
+    if (state.scene.fog instanceof THREE.FogExp2) {
+      // day mode = less fog, brighter
+      state.scene.fog.density = dayMode
+        ? Math.max(0.0005, fogDensityFor(dungeon) * 0.3)
+        : fogDensityFor(dungeon);
+    }
+    // adjust hemisphere + directional intensity via scene traversal
+    state.scene.traverse((o) => {
+      const light = o as THREE.Light;
+      if (light.isHemisphereLight) {
+        (light as THREE.HemisphereLight).intensity = dayMode ? 1.8 : 1.3;
+      } else if (light.isDirectionalLight) {
+        (light as THREE.DirectionalLight).intensity = dayMode ? 1.2 : 0.75;
+      }
+    });
+  }, [dayMode, dungeon]);
+
+  // ---- highlight selected room in scene ----
+  useEffect(() => {
+    threeRef.current?.dungeonScene?.setHighlightedRoom(selectedRoom);
+  }, [selectedRoom, dungeon]);
+
+  // ---- listen for room pick events from the canvas ----
+  useEffect(() => {
+    const onPick = (e: Event) => {
+      const roomId = (e as CustomEvent<number>).detail;
+      setSelectedRoom(roomId);
+    };
+    window.addEventListener('dungeon-room-pick', onPick);
+    return () => window.removeEventListener('dungeon-room-pick', onPick);
+  }, []);
 
   // ---- init Three.js once ----
   useEffect(() => {
@@ -97,6 +153,11 @@ export function DungeonViewer() {
       raf: 0, zoom: 1, pan: new THREE.Vector2(0, 0),
     };
     threeRef.current = state;
+    // room pick callback (set by React state setter below)
+    (state as any).onRoomPicked = (roomId: number) => {
+      // dispatched to React state via a custom event (closures can't capture setState)
+      window.dispatchEvent(new CustomEvent('dungeon-room-pick', { detail: roomId }));
+    };
 
     // mutable ref to the latest dungeon (closures read this)
     let currentDungeon = dungeon;
@@ -164,14 +225,37 @@ export function DungeonViewer() {
     renderer.domElement.addEventListener('touchstart', onTouchStart, { passive: false });
     renderer.domElement.addEventListener('touchmove', onTouchMove, { passive: false });
 
-    // pan (drag)
+    // pan (drag) — also track click-vs-drag for room selection
     let dragging = false;
+    let downX = 0, downY = 0;
     let lastX = 0, lastY = 0;
-    const onDown = (e: PointerEvent) => { dragging = true; lastX = e.clientX; lastY = e.clientY; renderer.domElement.setPointerCapture(e.pointerId); };
-    const onUp = (e: PointerEvent) => { dragging = false; };
+    let moved = false;
+    const onDown = (e: PointerEvent) => {
+      dragging = true; moved = false;
+      downX = lastX = e.clientX; downY = lastY = e.clientY;
+      renderer.domElement.setPointerCapture(e.pointerId);
+    };
+    const onUp = (e: PointerEvent) => {
+      dragging = false;
+      // if pointer barely moved, treat as click → pick room
+      if (!moved && Math.abs(e.clientX - downX) < 5 && Math.abs(e.clientY - downY) < 5) {
+        const ds = threeRef.current?.dungeonScene;
+        if (!ds) return;
+        const rect = renderer.domElement.getBoundingClientRect();
+        const ndcX = ((e.clientX - rect.left) / rect.width) * 2 - 1;
+        const ndcY = -((e.clientY - rect.top) / rect.height) * 2 + 1;
+        const hit = ds.pickRoom(ndcX, ndcY, camera);
+        if (hit && hit.roomId >= 0) {
+          (threeRef.current as any)?.onRoomPicked?.(hit.roomId);
+        } else {
+          (threeRef.current as any)?.onRoomPicked?.(-1);
+        }
+      }
+    };
     const onMove = (e: PointerEvent) => {
       if (!dragging) return;
       const dx = e.clientX - lastX, dy = e.clientY - lastY;
+      if (Math.abs(e.clientX - downX) > 5 || Math.abs(e.clientY - downY) > 5) moved = true;
       lastX = e.clientX; lastY = e.clientY;
       // pan in world units: screen delta → world delta via ortho frustum.
       // Direction follows the camera yaw so panning feels natural after rotation.
@@ -571,6 +655,13 @@ export function DungeonViewer() {
           >
             <Download className="h-3.5 w-3.5" />
           </button>
+          <button
+            onClick={() => setDayMode((v) => !v)}
+            title="Day/night mode"
+            className={`pointer-events-auto hidden h-7 w-7 items-center justify-center rounded-full border transition-colors md:flex ${dayMode ? 'border-amber-400/60 bg-amber-500/30 text-amber-100' : 'border-amber-800/40 bg-amber-950/20 text-amber-300/70 hover:bg-amber-900/40 hover:text-amber-100'}`}
+          >
+            {dayMode ? <Sun className="h-3.5 w-3.5" /> : <Moon className="h-3.5 w-3.5" />}
+          </button>
         </div>
       </header>
 
@@ -618,12 +709,31 @@ export function DungeonViewer() {
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent className="border-amber-900/40 bg-black/90 text-amber-100">
-                    {(['crypt', 'cavern', 'catacomb', 'forge'] as Theme[]).map((t) => (
+                    {(['crypt', 'cavern', 'catacomb', 'forge', 'ice', 'jungle'] as Theme[]).map((t) => (
                       <SelectItem key={t} value={t} className="capitalize">{t}</SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
               </div>
+
+              {/* seed history */}
+              {seedHistory.length > 1 && (
+                <div className="space-y-1.5">
+                  <Label className="text-xs uppercase tracking-wider text-amber-200/50">Recent Seeds</Label>
+                  <div className="flex flex-wrap gap-1">
+                    {seedHistory.map((s, i) => (
+                      <button
+                        key={s + '-' + i}
+                        onClick={() => setParams((p) => ({ ...p, seed: s }))}
+                        title={`Load seed ${s}`}
+                        className={`rounded border px-1.5 py-0.5 font-mono text-[9px] transition-colors ${s === params.seed ? 'border-amber-500/60 bg-amber-800/40 text-amber-100' : 'border-amber-900/30 bg-amber-950/20 text-amber-300/60 hover:bg-amber-900/30 hover:text-amber-100'}`}
+                      >
+                        {s}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
 
               <div className="flex gap-2 pt-1">
                 <Button onClick={regenerate} className="flex-1 border-amber-700/50 bg-amber-800/40 text-amber-50 hover:bg-amber-700/50">
@@ -853,6 +963,19 @@ export function DungeonViewer() {
         </aside>
       )}
 
+      {/* Room inspector — floating card when a room is selected */}
+      {selectedRoom >= 0 && selectedRoom < dungeon.rooms.length && (
+        <RoomInspector
+          room={dungeon.rooms[selectedRoom]}
+          dungeon={dungeon}
+          onClose={() => setSelectedRoom(-1)}
+          onFocus={() => {
+            const r = dungeon.rooms[selectedRoom];
+            focusOnCellRef.current?.(r.cx, r.cy);
+          }}
+        />
+      )}
+
       {/* Sticky footer */}
       <footer className="z-10 mt-auto border-t border-amber-900/30 bg-black/80 px-4 py-2 backdrop-blur-md">
         <div className="mx-auto flex max-w-7xl flex-wrap items-center justify-between gap-2 text-[11px] text-amber-200/50">
@@ -950,6 +1073,78 @@ function TooltipButton({ active, onClick, icon, label }: {
         <TooltipContent side="bottom" className="border-amber-900/40 bg-black/90 text-amber-100">{label}</TooltipContent>
       </Tooltip>
     </TooltipProvider>
+  );
+}
+
+// ---- Room Inspector (floating card showing selected room details) ----
+function RoomInspector({ room, dungeon, onClose, onFocus }: {
+  room: Dungeon['rooms'][number];
+  dungeon: Dungeon;
+  onClose: () => void;
+  onFocus: () => void;
+}) {
+  const typeColor = ROOM_TYPE_COLOR[room.type] ?? '#9a8a78';
+  const spawnsInRoom = dungeon.spawns.filter((s) => s.roomId === room.id);
+  const propsInRoom = dungeon.props.filter((p) => p.roomId === room.id);
+  const isBoss = room.type === 'boss';
+  const isEntrance = room.type === 'entrance';
+  return (
+    <div className="pointer-events-auto absolute bottom-20 left-1/2 z-40 w-[min(22rem,calc(100vw-2rem))] -translate-x-1/2 animate-in fade-in slide-in-from-bottom-2 duration-200">
+      <div className="rounded-xl border border-amber-900/50 bg-black/85 p-4 shadow-2xl backdrop-blur-md">
+        <div className="mb-3 flex items-start justify-between">
+          <div className="flex items-center gap-2">
+            <span className="inline-block h-3 w-3 rounded-full ring-2 ring-white/20" style={{ background: typeColor }} />
+            <div>
+              <div className="font-serif text-sm capitalize text-amber-100">{room.type} Room #{room.id}</div>
+              <div className="font-mono text-[10px] text-amber-300/50">{room.shape} · {room.cells} cells · deg {room.degree}</div>
+            </div>
+          </div>
+          <button onClick={onClose} className="text-amber-300/50 hover:text-amber-100">
+            <X className="h-4 w-4" />
+          </button>
+        </div>
+        <div className="grid grid-cols-2 gap-x-3 gap-y-1.5 font-mono text-[11px]">
+          <div className="flex justify-between"><span className="text-amber-200/40">Center</span><span className="text-amber-100/80">{room.cx}, {room.cy}</span></div>
+          <div className="flex justify-between"><span className="text-amber-200/40">Size</span><span className="text-amber-100/80">{room.w}×{room.h}</span></div>
+          <div className="flex justify-between"><span className="text-amber-200/40">Depth</span><span className="text-amber-100/80">{room.depth}</span></div>
+          <div className="flex justify-between"><span className="text-amber-200/40">Difficulty</span><span className={isBoss ? 'text-red-400' : 'text-amber-100/80'}>{(room.difficulty * 100).toFixed(0)}%</span></div>
+          <div className="flex justify-between"><span className="text-amber-200/40">Spawns</span><span className="text-amber-100/80">{spawnsInRoom.length}</span></div>
+          <div className="flex justify-between"><span className="text-amber-200/40">Props</span><span className="text-amber-100/80">{propsInRoom.length}</span></div>
+        </div>
+        {/* difficulty bar */}
+        <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-black/50">
+          <div className="h-full rounded-full transition-all" style={{
+            width: `${room.difficulty * 100}%`,
+            background: `linear-gradient(90deg, #22c55e, #eab308, #ef4444)`,
+          }} />
+        </div>
+        {/* spawn tier breakdown */}
+        {spawnsInRoom.length > 0 && (
+          <div className="mt-2 flex flex-wrap gap-1">
+            {spawnsInRoom.reduce((m, s) => { m[s.tier] = (m[s.tier] ?? 0) + 1; return m; }, {} as Record<number, number>) &&
+              Object.entries(spawnsInRoom.reduce((m, s) => { m[s.tier] = (m[s.tier] ?? 0) + 1; return m; }, {} as Record<number, number>)).map(([tier, n]) => (
+                <span key={tier} className="rounded border px-1.5 py-0.5 text-[9px]" style={{
+                  borderColor: (['#88ff88', '#ffcc44', '#ff5544', '#ff2222'][Number(tier)] ?? '#888') + '66',
+                  color: ['#88ff88', '#ffcc44', '#ff5544', '#ff2222'][Number(tier)] ?? '#888',
+                  background: (['#88ff88', '#ffcc44', '#ff5544', '#ff2222'][Number(tier)] ?? '#888') + '11',
+                }}>
+                  {['trash', 'normal', 'elite', 'boss'][Number(tier)]} ×{n}
+                </span>
+              ))}
+          </div>
+        )}
+        {isEntrance && <p className="mt-2 text-[10px] text-blue-300/60">✦ Starting point — the adventurer's portal home.</p>}
+        {isBoss && <p className="mt-2 text-[10px] text-red-300/60">☠ Final encounter — the dungeon's darkest heart.</p>}
+        {room.type === 'treasure' && <p className="mt-2 text-[10px] text-amber-300/60">✧ Dead-end reward — a chest awaits.</p>}
+        {room.type === 'shrine' && <p className="mt-2 text-[10px] text-cyan-300/60">◈ Restorative shrine — crystal hums with power.</p>}
+        <button
+          onClick={onFocus}
+          className="mt-3 flex w-full items-center justify-center gap-1.5 rounded-lg border border-amber-800/40 bg-amber-950/30 py-1.5 text-xs text-amber-200 transition-colors hover:bg-amber-900/40 hover:text-amber-100"
+        >
+          <Crosshair className="h-3.5 w-3.5" /> Focus Camera
+        </button>
+      </div>
+    </div>
   );
 }
 

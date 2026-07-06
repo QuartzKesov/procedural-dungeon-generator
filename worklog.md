@@ -144,3 +144,27 @@ Stage Summary:
 - VLM assessment: 8/10 — presets panel confirmed visible, all buttons present in DOM
 - Clean lint, dev server stable on port 3000
 - Next round: could add room hover/selection inspector, more themes, day/night toggle, minimap viewport indicator, seed history
+
+---
+Task ID: cron-review-3
+Agent: main (webDevReview cron)
+Task: Periodic QA + add new features (room inspector, day/night, seed history, new themes, minimap viewport)
+
+Work Log:
+- QA baseline: 6/6 tests pass, 8.2ms perf, lint clean, dev server stable
+- Enhancement: room selection inspector — click any room in the 3D view to select it. Raycaster picks grid cell via ground plane intersection, identifies owning room. Selected room gets a pulsing torus ring (tinted by room type) + a floating detail card showing: type, shape, cells, center, size, depth, difficulty %, spawn count, prop count, difficulty bar, spawn tier breakdown badges, flavor text (entrance/boss/treasure/shrine), and a "Focus Camera" button. Click empty space to deselect. Distinguished click vs drag (5px threshold) so panning doesn't trigger selection.
+- Enhancement: day/night atmosphere toggle — Moon/Sun button in top bar. Day mode reduces fog density (×0.3) and boosts hemisphere (1.3→1.8) + directional (0.75→1.2) light intensity for a brighter exploration view. Night mode (default) is the torchlit atmospheric look.
+- Enhancement: seed history — tracks recent 10 unique seeds in localStorage. Displayed as clickable badges below the theme selector. Current seed is highlighted. Click any badge to reload that seed.
+- Enhancement: 2 new themes — 'ice' (bluish floor/wall, cyan tint) and 'jungle' (greenish floor, dark green wall, green tint). Added to types.ts Theme union, generator THEME_TINT, scene THEME_FLOOR/THEME_WALL, and viewer theme select. All acceptance tests pass with new themes.
+- Enhancement: scene.ts API — added setHighlightedRoom(roomId) and pickRoom(ndcX, ndcY, camera) to DungeonScene interface. Highlight ring is a TorusGeometry with additive blending, pulsing opacity + slow rotation. pickRoom uses Raycaster against ground plane → grid cell → owner lookup.
+- Styling: room inspector card uses animate-in fade-in slide-in-from-bottom-2 animation, glassmorphism (bg-black/85 backdrop-blur), color-coded room type dot, gradient difficulty bar (green→yellow→red), tier-colored spawn badges.
+- Verified end-to-end: 6/6 tests pass, room click selects room 23 (confirmed via pick event + inspector text), day/night toggle brightens scene (center pixel 50→70), ice theme renders 6.2% blueish pixels, seed history persists to localStorage.
+- All acceptance tests pass for seeds {1,7,42,1337,99999,123456} and all 6 themes. 60-room gen 8.2ms.
+
+Stage Summary:
+- ALL 6 acceptance tests pass across all tested seeds, room counts {20,42,60}, and all 6 themes
+- 60-room generation: 8.2ms (best of 3), well under 50ms budget
+- New features: room selection inspector (raycast + detail card + highlight ring), day/night toggle, seed history (localStorage), 2 new themes (ice, jungle), scene API extensions (setHighlightedRoom, pickRoom)
+- VLM assessment: 8/10 — all features functional
+- Clean lint, dev server stable on port 3000
+- Next round: could add minimap viewport indicator, room hover preview, more prop variety, water/lava features, saved layouts gallery

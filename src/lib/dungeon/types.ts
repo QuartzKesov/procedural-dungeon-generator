@@ -1,7 +1,7 @@
 // types.ts — Data contract for the dungeon generator.
 // Pure data: NO THREE imports. Typed arrays + POJOs only.
 
-export type Theme = 'crypt' | 'cavern' | 'catacomb' | 'forge';
+export type Theme = 'crypt' | 'cavern' | 'catacomb' | 'forge' | 'ice' | 'jungle';
 
 export interface Params {
   seed: number;

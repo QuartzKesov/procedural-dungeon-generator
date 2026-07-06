@@ -31,12 +31,16 @@ const THEME_FLOOR: Record<string, [number, number, number]> = {
   cavern:   [0.58, 0.46, 0.36],
   catacomb: [0.72, 0.66, 0.58],
   forge:    [0.56, 0.42, 0.34],
+  ice:      [0.60, 0.68, 0.74],
+  jungle:   [0.42, 0.50, 0.36],
 };
 const THEME_WALL: Record<string, [number, number, number]> = {
   crypt:    [0.48, 0.45, 0.50],
   cavern:   [0.42, 0.32, 0.26],
   catacomb: [0.60, 0.54, 0.48],
   forge:    [0.40, 0.30, 0.26],
+  ice:      [0.50, 0.58, 0.66],
+  jungle:   [0.30, 0.36, 0.24],
 };
 
 // deterministic per-cell value noise (0..1)
@@ -125,6 +129,10 @@ export interface DungeonScene {
   setOverlays(toggles: OverlayToggles): void;
   /** Drive staged build animation (0..1). */
   setBuildProgress(p: number): void;
+  /** Highlight a room by id (raises its floor tiles + adds a ring). -1 = clear. */
+  setHighlightedRoom(roomId: number): void;
+  /** Raycast mouse (NDC) → grid cell. Returns {gridX, gridY, roomId} or null. */
+  pickRoom(ndcX: number, ndcY: number, camera: THREE.Camera): { gridX: number; gridY: number; roomId: number } | null;
   dispose(): void;
 }
 
@@ -662,13 +670,64 @@ export function buildDungeonScene(d: Dungeon, opts: BuildOptions): DungeonScene 
   }
   buildOverlays(currentOverlays);
 
+  // ---- ROOM HIGHLIGHT RING (for selection inspector) ----
+  // A torus that sits on the floor of the highlighted room, pulsing.
+  const highlightRing = new THREE.Mesh(
+    new THREE.TorusGeometry(1, 0.06, 8, 32),
+    new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0, blending: THREE.AdditiveBlending, depthWrite: false }),
+  );
+  highlightRing.rotation.x = -Math.PI / 2;
+  highlightRing.position.y = 0.06;
+  highlightRing.visible = false;
+  group.add(highlightRing);
+  let highlightedRoomId = -1;
+
+  function setHighlightedRoom(roomId: number) {
+    highlightedRoomId = roomId;
+    if (roomId < 0 || roomId >= d.rooms.length) {
+      highlightRing.visible = false;
+      return;
+    }
+    const r = d.rooms[roomId];
+    highlightRing.visible = true;
+    highlightRing.position.set(worldX(r.cx), 0.06, worldZ(r.cy));
+    const radius = Math.max(r.w, r.h) + 0.5;
+    highlightRing.scale.setScalar(radius);
+    // tint ring by room type
+    const tintColor =
+      r.type === 'boss' ? 0xff3a2a :
+      r.type === 'entrance' ? 0x6a8cff :
+      r.type === 'treasure' ? 0xffd24a :
+      r.type === 'shrine' ? 0x40d0ff :
+      r.type === 'elite' ? 0xff7a3a : 0xffffff;
+    (highlightRing.material as THREE.MeshBasicMaterial).color.setHex(tintColor);
+  }
+
+  // ---- ROOM PICKING (raycast NDC → grid cell → room) ----
+  // Uses a raycaster against an invisible ground plane at y=0.
+  const raycaster = new THREE.Raycaster();
+  const groundPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
+  const _hit = new THREE.Vector3();
+  function pickRoom(ndcX: number, ndcY: number, camera: THREE.Camera): { gridX: number; gridY: number; roomId: number } | null {
+    raycaster.setFromCamera(new THREE.Vector2(ndcX, ndcY), camera);
+    if (!raycaster.ray.intersectPlane(groundPlane, _hit)) return null;
+    // world → grid: gridX = worldX + cx, gridY = worldZ + cz
+    const gx = Math.round(_hit.x + cx);
+    const gy = Math.round(_hit.z + cz);
+    if (gx < 0 || gy < 0 || gx >= W || gy >= H) return null;
+    const i = gy * W + gx;
+    if (grid[i] !== FLOOR) return null;
+    const rid = owner[i] - 1;
+    return { gridX: gx, gridY: gy, roomId: rid };
+  }
+
   // ---- STAGED BUILD ANIMATION ----
   // progress 0..1 maps to phases:
-  //   0.00-0.18  scatter/separate (room markers only) 
-  //   0.18-0.32  graph (overlays only) 
-  //   0.32-0.62  floors flood by BFS distance 
-  //   0.62-0.82  walls rise 
-  //   0.82-1.00  props pop + lights ramp 
+  //   0.00-0.18  scatter/separate (room markers only)
+  //   0.18-0.32  graph (overlays only)
+  //   0.32-0.62  floors flood by BFS distance
+  //   0.62-0.82  walls rise
+  //   0.82-1.00  props pop + lights ramp
   let buildProgress = opts.animateBuild ? opts.buildProgress : 1;
 
   // store per-instance base data for animation
@@ -853,6 +912,12 @@ export function buildDungeonScene(d: Dungeon, opts: BuildOptions): DungeonScene 
       emberGeo.attributes.position.needsUpdate = true;
       emberGeo.attributes.color.needsUpdate = true;
     }
+    // highlight ring pulse + slow rotation
+    if (highlightRing.visible) {
+      const pulse = 0.5 + 0.4 * Math.sin(elapsedSec * 3);
+      (highlightRing.material as THREE.MeshBasicMaterial).opacity = pulse * ramp;
+      highlightRing.rotation.z = elapsedSec * 0.5;
+    }
   }
 
   function setOverlays(toggles: OverlayToggles) {
@@ -877,6 +942,8 @@ export function buildDungeonScene(d: Dungeon, opts: BuildOptions): DungeonScene 
     update,
     setOverlays,
     setBuildProgress,
+    setHighlightedRoom,
+    pickRoom,
     dispose,
   };
 }

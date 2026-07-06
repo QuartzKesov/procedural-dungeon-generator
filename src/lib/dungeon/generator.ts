@@ -50,6 +50,8 @@ const THEME_TINT: Record<Theme, [number, number, number]> = {
   cavern:   [0.52, 0.40, 0.30],
   catacomb: [0.62, 0.57, 0.50],
   forge:    [0.58, 0.34, 0.24],
+  ice:      [0.60, 0.72, 0.82],
+  jungle:   [0.40, 0.56, 0.36],
 };
 
 // ---- Stage: room scatter -------------------------------------------------
