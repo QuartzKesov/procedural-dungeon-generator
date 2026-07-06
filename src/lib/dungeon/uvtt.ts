@@ -210,40 +210,104 @@ export function renderTopDownMap(
           ctx.lineWidth = 2;
           ctx.stroke();
           break;
-        case 'chest':
-          ctx.fillStyle = '#8a5a2a';
-          ctx.fillRect(px - s, py - s * 0.7, s * 2, s * 1.4);
-          ctx.strokeStyle = '#5a3a1a';
-          ctx.lineWidth = 2;
-          ctx.strokeRect(px - s, py - s * 0.7, s * 2, s * 1.4);
-          // lock
-          ctx.fillStyle = '#caa030';
+        case 'chest': {
+          // Top-down chest: wooden body with iron bands + lid seam + lock plate
+          const w = s * 1.6, h = s * 1.1;
+          // body shadow
+          ctx.fillStyle = 'rgba(0,0,0,0.4)';
+          ctx.fillRect(px - w / 2 + 1, py - h / 2 + 1, w, h);
+          // body (dark wood)
+          const cg = ctx.createLinearGradient(px, py - h / 2, px, py + h / 2);
+          cg.addColorStop(0, '#6a3e1c');
+          cg.addColorStop(0.5, '#8a5a2e');
+          cg.addColorStop(1, '#4a2a14');
+          ctx.fillStyle = cg;
+          ctx.fillRect(px - w / 2, py - h / 2, w, h);
+          // iron bands (top + bottom)
+          ctx.fillStyle = '#3a3a42';
+          ctx.fillRect(px - w / 2, py - h / 2, w, h * 0.18);
+          ctx.fillRect(px - w / 2, py + h / 2 - h * 0.18, w, h * 0.18);
+          // lid seam (center horizontal line)
+          ctx.strokeStyle = '#2a1a0a';
+          ctx.lineWidth = 1.5;
           ctx.beginPath();
-          ctx.arc(px, py, s * 0.25, 0, Math.PI * 2);
+          ctx.moveTo(px - w / 2, py);
+          ctx.lineTo(px + w / 2, py);
+          ctx.stroke();
+          // lock plate (center)
+          ctx.fillStyle = '#5a5a62';
+          ctx.fillRect(px - w * 0.12, py - h * 0.18, w * 0.24, h * 0.36);
+          ctx.fillStyle = '#caa040';
+          ctx.beginPath();
+          ctx.arc(px, py, w * 0.06, 0, Math.PI * 2);
+          ctx.fill();
+          // outline
+          ctx.strokeStyle = '#2a1a0a';
+          ctx.lineWidth = 1;
+          ctx.strokeRect(px - w / 2, py - h / 2, w, h);
+          break;
+        }
+        case 'torch': {
+          // Wall-mounted torch bracket: dark iron ring + glowing ember + soft halo
+          // Soft glow halo (additive)
+          const halo = ctx.createRadialGradient(px, py, 0, px, py, s * 1.8);
+          halo.addColorStop(0, 'rgba(255,170,70,0.55)');
+          halo.addColorStop(0.4, 'rgba(255,120,40,0.25)');
+          halo.addColorStop(1, 'rgba(255,90,20,0)');
+          ctx.fillStyle = halo;
+          ctx.beginPath();
+          ctx.arc(px, py, s * 1.8, 0, Math.PI * 2);
+          ctx.fill();
+          // Iron bracket ring (top-down = small dark circle)
+          ctx.fillStyle = '#2a2620';
+          ctx.beginPath();
+          ctx.arc(px, py, s * 0.42, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.strokeStyle = '#1a1612';
+          ctx.lineWidth = 1.5;
+          ctx.stroke();
+          // Glowing ember core
+          const ember = ctx.createRadialGradient(px, py, 0, px, py, s * 0.32);
+          ember.addColorStop(0, '#ffe080');
+          ember.addColorStop(0.5, '#ffa030');
+          ember.addColorStop(1, '#cc4010');
+          ctx.fillStyle = ember;
+          ctx.beginPath();
+          ctx.arc(px, py, s * 0.32, 0, Math.PI * 2);
           ctx.fill();
           break;
-        case 'torch':
-          ctx.fillStyle = '#4a3a2a';
-          ctx.fillRect(px - s * 0.2, py - s * 0.5, s * 0.4, s);
-          ctx.fillStyle = '#ff9a3a';
+        }
+        case 'brazier': {
+          // Standing brazier: iron bowl + glowing coals + wide halo
+          const halo = ctx.createRadialGradient(px, py, 0, px, py, s * 2.2);
+          halo.addColorStop(0, 'rgba(255,140,50,0.5)');
+          halo.addColorStop(0.5, 'rgba(255,90,30,0.2)');
+          halo.addColorStop(1, 'rgba(200,60,10,0)');
+          ctx.fillStyle = halo;
           ctx.beginPath();
-          ctx.arc(px, py - s * 0.6, s * 0.35, 0, Math.PI * 2);
+          ctx.arc(px, py, s * 2.2, 0, Math.PI * 2);
           ctx.fill();
-          ctx.fillStyle = '#ffcc60';
+          // bowl rim (dark iron)
+          ctx.fillStyle = '#1e1a16';
           ctx.beginPath();
-          ctx.arc(px, py - s * 0.6, s * 0.2, 0, Math.PI * 2);
+          ctx.arc(px, py, s * 0.75, 0, Math.PI * 2);
           ctx.fill();
-          break;
-        case 'brazier':
-          ctx.fillStyle = '#3a2a22';
+          // inner bowl
+          ctx.fillStyle = '#3a2a20';
           ctx.beginPath();
-          ctx.arc(px, py, s * 0.8, 0, Math.PI * 2);
+          ctx.arc(px, py, s * 0.6, 0, Math.PI * 2);
           ctx.fill();
-          ctx.fillStyle = '#ff7a2a';
+          // glowing coals
+          const coals = ctx.createRadialGradient(px, py, 0, px, py, s * 0.5);
+          coals.addColorStop(0, '#ffe070');
+          coals.addColorStop(0.5, '#ff8020');
+          coals.addColorStop(1, '#a02000');
+          ctx.fillStyle = coals;
           ctx.beginPath();
           ctx.arc(px, py, s * 0.5, 0, Math.PI * 2);
           ctx.fill();
           break;
+        }
         case 'crystal':
           ctx.fillStyle = '#40d0ff';
           ctx.beginPath();
@@ -469,47 +533,61 @@ export function renderTopDownMap(
           ctx.stroke();
           break;
         case 'door': {
-          // Draw door as a line across the corridor with a small arch
+          // Thematic door: stone frame (two side posts + lintel) with a wooden
+          // door slab + iron hinges. Orientation follows p.rot: rot≈0 → slab
+          // spans east-west (horizontal line); rot≈π/2 → north-south (vertical).
           const r = p.rot;
           const isHoriz = Math.abs(Math.sin(r)) < 0.5;
-          ctx.strokeStyle = '#8a5a2a';
-          ctx.lineWidth = 4;
-          ctx.beginPath();
-          if (isHoriz) {
-            ctx.moveTo(px - s * 1.1, py);
-            ctx.lineTo(px + s * 1.1, py);
-          } else {
-            ctx.moveTo(px, py - s * 1.1);
-            ctx.lineTo(px, py + s * 1.1);
+          const len = s * 1.15;       // door half-length
+          const thick = s * 0.22;     // frame thickness
+          ctx.save();
+          ctx.translate(px, py);
+          if (!isHoriz) ctx.rotate(Math.PI / 2);
+          // --- stone side posts (top-down = short rectangles at each end) ---
+          ctx.fillStyle = '#5a5258';
+          ctx.fillRect(-len - thick * 0.5, -thick, thick, thick * 2);
+          ctx.fillRect(len - thick * 0.5, -thick, thick, thick * 2);
+          // stone texture flecks
+          ctx.fillStyle = '#3a3438';
+          ctx.fillRect(-len - thick * 0.3, -thick * 0.6, thick * 0.25, thick * 0.4);
+          ctx.fillRect(len - thick * 0.3, thick * 0.1, thick * 0.25, thick * 0.4);
+          // --- stone lintel (center strip under the slab) ---
+          ctx.fillStyle = '#6a6066';
+          ctx.fillRect(-len - thick * 0.5, -thick * 0.35, len * 2 + thick, thick * 0.7);
+          // --- wooden door slab ---
+          const dg = ctx.createLinearGradient(0, -thick * 0.8, 0, thick * 0.8);
+          dg.addColorStop(0, '#7a4a22');
+          dg.addColorStop(0.5, '#5a3416');
+          dg.addColorStop(1, '#3a2410');
+          ctx.fillStyle = dg;
+          ctx.fillRect(-len, -thick * 0.8, len * 2, thick * 1.6);
+          // wood plank seams
+          ctx.strokeStyle = 'rgba(20,10,4,0.6)';
+          ctx.lineWidth = 0.8;
+          for (let k = -2; k <= 2; k++) {
+            const xx = k * len * 0.4;
+            ctx.beginPath();
+            ctx.moveTo(xx, -thick * 0.8);
+            ctx.lineTo(xx, thick * 0.8);
+            ctx.stroke();
           }
-          ctx.stroke();
-          // door frame knobs
-          ctx.fillStyle = '#caa050';
-          if (isHoriz) {
-            ctx.beginPath(); ctx.arc(px - s * 1.1, py, 2, 0, Math.PI * 2); ctx.fill();
-            ctx.beginPath(); ctx.arc(px + s * 1.1, py, 2, 0, Math.PI * 2); ctx.fill();
-          } else {
-            ctx.beginPath(); ctx.arc(px, py - s * 1.1, 2, 0, Math.PI * 2); ctx.fill();
-            ctx.beginPath(); ctx.arc(px, py + s * 1.1, 2, 0, Math.PI * 2); ctx.fill();
-          }
+          // --- iron hinges (two small dark circles) ---
+          ctx.fillStyle = '#2a2a30';
+          ctx.beginPath(); ctx.arc(-len * 0.6, 0, thick * 0.22, 0, Math.PI * 2); ctx.fill();
+          ctx.beginPath(); ctx.arc(len * 0.6, 0, thick * 0.22, 0, Math.PI * 2); ctx.fill();
+          // --- iron handle (center) ---
+          ctx.fillStyle = '#1a1a20';
+          ctx.beginPath(); ctx.arc(0, 0, thick * 0.28, 0, Math.PI * 2); ctx.fill();
+          ctx.fillStyle = '#5a5a60';
+          ctx.beginPath(); ctx.arc(0, 0, thick * 0.14, 0, Math.PI * 2); ctx.fill();
+          ctx.restore();
           break;
         }
       }
     }
 
-    // Draw spawn markers (small colored dots)
-    for (const s of d.spawns) {
-      if (s.x < 0 || s.y < 0 || s.x >= W || s.y >= H) continue;
-      const px = s.x * scale + scale / 2;
-      const py = s.y * scale + scale / 2;
-      const colors = ['#88ff88', '#ffcc44', '#ff5544', '#ff2222'];
-      ctx.fillStyle = colors[s.tier] ?? '#888';
-      ctx.globalAlpha = 0.4;
-      ctx.beginPath();
-      ctx.arc(px, py, scale * 0.1, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.globalAlpha = 1;
-    }
+    // Spawn markers are NOT drawn — they clutter the map and don't belong in
+    // a battlemap export. Foundry GMs place tokens manually.
   }
 
   // ---- Pass 5: Grid lines (very subtle) ----

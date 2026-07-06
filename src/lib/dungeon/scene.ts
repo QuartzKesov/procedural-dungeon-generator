@@ -88,9 +88,23 @@ function debrisGeo(): THREE.BufferGeometry {
   return g;
 }
 function chestGeo(): THREE.BufferGeometry {
-  const g = new THREE.BoxGeometry(0.7, 0.5, 0.5);
-  g.translate(0, 0.25, 0);
-  return g;
+  // Chest = body (wide box) + domed lid (half-cylinder) + iron band.
+  // Merged manually for one InstancedMesh.
+  const body = new THREE.BoxGeometry(0.75, 0.42, 0.55);
+  body.translate(0, 0.21, 0);
+  // Domed lid: half-cylinder lying along X axis
+  const lid = new THREE.CylinderGeometry(0.275, 0.275, 0.75, 10, 1, false, 0, Math.PI);
+  lid.rotateZ(Math.PI / 2);
+  lid.translate(0, 0.42, 0);
+  const merged = new THREE.BufferGeometry();
+  const bodyPos = body.attributes.position.array;
+  const lidPos = lid.attributes.position.array;
+  const combined = new Float32Array(bodyPos.length + lidPos.length);
+  combined.set(bodyPos, 0);
+  combined.set(lidPos, bodyPos.length);
+  merged.setAttribute('position', new THREE.BufferAttribute(combined, 3));
+  merged.computeVertexNormals();
+  return merged;
 }
 function spawnGeo(): THREE.BufferGeometry {
   const g = new THREE.TorusGeometry(0.35, 0.05, 6, 16);
@@ -102,11 +116,27 @@ function crystalGeo(): THREE.BufferGeometry {
   return new THREE.OctahedronGeometry(0.5, 0);
 }
 function flameGeo(): THREE.BufferGeometry {
-  return new THREE.OctahedronGeometry(0.16, 0);
+  // Slightly elongated teardrop flame
+  const g = new THREE.OctahedronGeometry(0.16, 0);
+  g.scale(0.9, 1.5, 0.9);
+  return g;
 }
 function bracketGeo(): THREE.BufferGeometry {
-  const g = new THREE.BoxGeometry(0.12, 0.12, 0.18);
-  return g;
+  // Wall torch bracket: a short iron arm + a small bowl that holds the ember.
+  // Merged manually (BoxGeometry arm + CylinderGeometry bowl).
+  const arm = new THREE.BoxGeometry(0.1, 0.1, 0.22);
+  arm.translate(0, 0.05, 0);
+  const bowl = new THREE.CylinderGeometry(0.14, 0.09, 0.12, 8);
+  bowl.translate(0, 0.16, 0);
+  const merged = new THREE.BufferGeometry();
+  const armPos = arm.attributes.position.array;
+  const bowlPos = bowl.attributes.position.array;
+  const combined = new Float32Array(armPos.length + bowlPos.length);
+  combined.set(armPos, 0);
+  combined.set(bowlPos, armPos.length);
+  merged.setAttribute('position', new THREE.BufferAttribute(combined, 3));
+  merged.computeVertexNormals();
+  return merged;
 }
 function brazierGeo(): THREE.BufferGeometry {
   const g = new THREE.CylinderGeometry(0.28, 0.2, 0.5, 8);
@@ -246,13 +276,33 @@ function stairsUpGeo(): THREE.BufferGeometry {
   return g;
 }
 function doorGeo(): THREE.BufferGeometry {
-  // Door = tall wooden slab. Width 0.98 (X), height 2.4 (Y), thin 0.18 (Z).
-  // Taller than walls (2.2) so the top pokes above and is always visible.
-  // When rotY=0 the slab spans east-west (blocks north-south passage);
-  // when rotY=π/2 it spans north-sorth (blocks east-west passage).
-  const g = new THREE.BoxGeometry(0.98, 2.4, 0.18);
-  g.translate(0, 1.2, 0);
-  return g;
+  // Thematic door = stone frame (two posts + lintel) + wooden slab.
+  // Merged manually into a single BufferGeometry for one InstancedMesh.
+  // Slab: 0.9 wide × 2.0 tall × 0.1 thin. Posts at ±0.5.
+  const slab = new THREE.BoxGeometry(0.9, 2.0, 0.1);
+  slab.translate(0, 1.0, 0);
+  // Stone side posts
+  const postL = new THREE.BoxGeometry(0.14, 2.2, 0.2);
+  postL.translate(-0.52, 1.1, 0);
+  const postR = new THREE.BoxGeometry(0.14, 2.2, 0.2);
+  postR.translate(0.52, 1.1, 0);
+  // Stone lintel (top beam)
+  const lintel = new THREE.BoxGeometry(1.18, 0.18, 0.2);
+  lintel.translate(0, 2.2, 0);
+  const merged = new THREE.BufferGeometry();
+  const parts = [slab, postL, postR, lintel];
+  let totalLen = 0;
+  for (const p of parts) totalLen += p.attributes.position.array.length;
+  const combined = new Float32Array(totalLen);
+  let off = 0;
+  for (const p of parts) {
+    const arr = p.attributes.position.array;
+    combined.set(arr, off);
+    off += arr.length;
+  }
+  merged.setAttribute('position', new THREE.BufferAttribute(combined, 3));
+  merged.computeVertexNormals();
+  return merged;
 }
 function tableGeo(): THREE.BufferGeometry {
   const g = new THREE.BoxGeometry(0.8, 0.1, 0.5);
@@ -600,10 +650,11 @@ export function buildDungeonScene(d: Dungeon, opts: BuildOptions): DungeonScene 
   const flameMesh = buildPropInstanced(torches.concat(braziers), flameGeo(), flameMat, (p) => {
     const ox = p.kind === 'torch' ? Math.sin(p.rot) : 0;
     const oz = p.kind === 'torch' ? -Math.cos(p.rot) : 0;
-    const yy = p.kind === 'torch' ? 1.35 : 0.6;
+    // torch: flame sits in the bowl (bracket base 1.2 + bowl top 0.22 = ~1.42)
+    const yy = p.kind === 'torch' ? 1.42 : 0.6;
     return {
       pos: new THREE.Vector3(worldX(p.x) + ox * 0.45, yy, worldZ(p.y) + oz * 0.45),
-      scale: new THREE.Vector3(p.kind === 'brazier' ? 1.8 : 1, p.kind === 'brazier' ? 2.2 : 1, p.kind === 'brazier' ? 1.8 : 1),
+      scale: new THREE.Vector3(p.kind === 'brazier' ? 1.8 : 1.1, p.kind === 'brazier' ? 2.2 : 1.4, p.kind === 'brazier' ? 1.8 : 1.1),
       rotY: 0,
       color: new THREE.Color(p.kind === 'brazier' ? 0xff9a3a : 0xffb24a),
     };

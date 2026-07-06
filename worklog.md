@@ -406,3 +406,26 @@ Stage Summary:
 - UVTT image capped at 4096px max dimension (was 12800px = 159MP, now 16MP) — fixes "Dimensions 0x0" crash
 - Door 3D geometry improved: tall bright orange-brown slab visible above walls
 - All 5 acceptance tests pass, lint clean, dev server stable
+
+---
+Task ID: themed-icons-torch-door-chest
+Agent: main
+Task: Rework torch/door/chest icons in UVTT+PNG export to match dungeon theme; fix chest top-down orientation; remove green/yellow spawn dots
+
+Work Log:
+- Removed spawn marker dots (green/yellow/red) from UVTT+PNG export — they cluttered the battlemap and don't belong in a Foundry scene. GMs place tokens manually.
+- Reworked torch top-down icon: soft radial glow halo (orange) + dark iron bracket ring + glowing ember core (yellow→orange→red gradient). Reads as a wall-mounted torch from above, matches dungeon atmosphere.
+- Reworked brazier top-down icon: wide glow halo + dark iron bowl rim + inner bowl + glowing coals gradient. Matches standing brazier theme.
+- Reworked door top-down icon: stone side posts (dark gray) + stone lintel + wooden door slab (brown gradient with plank seams) + iron hinges + iron handle. Rotates with p.rot (horizontal/vertical). Thematic stone+wood look.
+- Reworked chest top-down icon: proper top-down rectangle with wooden body (gradient), iron bands (top+bottom), lid seam (horizontal line), iron lock plate, gold lock. Now reads as a chest from above.
+- Updated 3D door geometry: stone frame (two posts 0.14×2.2×0.2 + lintel 1.18×0.18×0.2) + wooden slab (0.9×2.0×0.1). Merged into one BufferGeometry for single InstancedMesh.
+- Updated 3D torch bracket geometry: iron arm (BoxGeometry) + small bowl (CylinderGeometry) holding the ember. Flame geometry elongated (scale 1.5 Y). Flame position raised to 1.42 (sits in bowl).
+- Updated 3D chest geometry: body (BoxGeometry) + domed lid (half-cylinder). Merged into one BufferGeometry.
+- Verified: 5/5 acceptance tests pass for seeds {1337,42,7,99999}. Lint clean. Pixel analysis confirms orange flame pixels (0.17%) + brown door/chest pixels (0.38%) present in 3D render.
+
+Stage Summary:
+- Torch: thematic wall bracket with glowing ember + halo (top-down PNG/dd2vtt)
+- Door: stone frame + wooden slab with hinges/handle (top-down PNG/dd2vtt + 3D)
+- Chest: proper top-down rectangle with iron bands + lock (top-down PNG/dd2vtt + 3D domed lid)
+- Removed all green/yellow spawn dots from battlemap export
+- All tests pass, lint clean
