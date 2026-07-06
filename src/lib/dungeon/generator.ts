@@ -210,7 +210,7 @@ function buildGraph(rng: RNG, centers: Pt[], loopChance: number): {
 }
 
 // ---- Stage: semantics ----------------------------------------------------
-function assignSemantics(rng: RNG, rooms: Room[], edges: Edge[]): {
+function assignSemantics(rng: RNG, rooms: Room[], edges: Edge[], params: Params): {
   entranceId: number; bossId: number; criticalPath: Set<number>;
 } {
   const n = rooms.length;
@@ -283,7 +283,9 @@ function assignSemantics(rng: RNG, rooms: Room[], edges: Edge[]): {
     if (i === bossId) { rooms[i].difficulty = 1.0; rooms[i].type = 'boss'; continue; }
     if (i === entranceId) { rooms[i].difficulty = 0.15; rooms[i].type = 'entrance'; continue; }
     const d = maxDepth > 0 ? rooms[i].depth / maxDepth : 0;
-    rooms[i].difficulty = 0.15 + 0.85 * d;
+    // multi-level: deeper floors have higher base difficulty
+    const levelBoost = (params.currentLevel ?? 0) * 0.1;
+    rooms[i].difficulty = Math.min(0.95, 0.15 + levelBoost + 0.85 * d);
   }
 
   // Leaves (degree 1) that aren't entrance → treasure (cap 4). Sort by dist desc
@@ -1065,8 +1067,14 @@ function coreGenerate(params: Params, seed: number): Dungeon {
   const rng = makeRng(seed);
   const t0 = (typeof performance !== 'undefined' ? performance.now() : Date.now());
 
+  // For multi-level: each deeper floor has more rooms + higher difficulty
+  const level = params.currentLevel ?? 0;
+  const roomCount = params.multiLevel
+    ? Math.round(params.roomCount * (1 + level * 0.15))
+    : params.roomCount;
+
   // 2. scatter
-  let raw = scatterRooms(rng.fork('scatter'), params.roomCount);
+  let raw = scatterRooms(rng.fork('scatter'), roomCount);
   // 3. separate + snap + cull
   raw = separateRooms(rng.fork('separate'), raw);
   raw = cullRooms(raw, params.roomCount);
@@ -1075,7 +1083,7 @@ function coreGenerate(params: Params, seed: number): Dungeon {
   const rooms: Room[] = raw.map((rm, i) => ({
     id: i, cx: rm.cx, cy: rm.cy, w: rm.rx, h: rm.ry, shape: rm.shape,
     type: 'combat' as RoomType, depth: 0, difficulty: 0.15, degree: 0, cells: 0,
-    tint: [0.5, 0.5, 0.5],
+    tint: [0.5, 0.5, 0.5], floor: params.currentLevel ?? 0,
   }));
 
   // grid bounds: encompass all room AABBs + margin
@@ -1112,7 +1120,7 @@ function coreGenerate(params: Params, seed: number): Dungeon {
   const { edges } = buildGraph(rng.fork('graph'), centers, params.loopChance);
 
   // 5. semantics
-  const { entranceId, bossId, criticalPath } = assignSemantics(rng.fork('semantics'), rooms, edges);
+  const { entranceId, bossId, criticalPath } = assignSemantics(rng.fork('semantics'), rooms, edges, params);
   const treasureRoomIds = new Set(rooms.filter((r) => r.type === 'treasure').map((r) => r.id));
   const shrineIds = new Set(rooms.filter((r) => r.type === 'shrine').map((r) => r.id));
 
@@ -1155,23 +1163,37 @@ function coreGenerate(params: Params, seed: number): Dungeon {
   // ---- multi-level: place stairs ----
   if (params.multiLevel) {
     const level = params.currentLevel ?? 0;
+    // Helper: find a floor cell near a room center (no blocked check — stairs don't conflict)
+    const findCellNear = (cx: number, cy: number): Cell | null => {
+      for (let radius = 0; radius <= 5; radius++) {
+        for (let dy = -radius; dy <= radius; dy++) {
+          for (let dx = -radius; dx <= radius; dx++) {
+            if (Math.abs(dx) !== radius && Math.abs(dy) !== radius) continue;
+            const x = cx + dx, y = cy + dy;
+            if (x < 0 || y < 0 || x >= W || y >= H) continue;
+            const i = y * W + x;
+            if (grid[i] === FLOOR) return { x, y };
+          }
+        }
+      }
+      return null;
+    };
     // stairs down (not on top floor)
     if (level < params.levelCount - 1) {
       const bossRoom = rooms[bossId];
-      // place near boss room center offset
-      const sx = bossRoom.cx + 1, sy = bossRoom.cy + 1;
-      if (sx >= 0 && sy >= 0 && sx < W && sy < H && grid[sy * W + sx] === FLOOR) {
-        baseDungeon.stairsDown = { x: sx, y: sy };
-        props.push({ kind: 'stairs_down', x: sx, y: sy, rot: 0, scale: 1, roomId: bossId, flickerPhase: 0 });
+      const cell = findCellNear(bossRoom.cx, bossRoom.cy);
+      if (cell) {
+        baseDungeon.stairsDown = cell;
+        props.push({ kind: 'stairs_down', x: cell.x, y: cell.y, rot: 0, scale: 1, roomId: bossId, flickerPhase: 0 });
       }
     }
     // stairs up (not on ground floor)
     if (level > 0) {
       const entRoom = rooms[entranceId];
-      const sx = entRoom.cx + 1, sy = entRoom.cy + 1;
-      if (sx >= 0 && sy >= 0 && sx < W && sy < H && grid[sy * W + sx] === FLOOR) {
-        baseDungeon.stairsUp = { x: sx, y: sy };
-        props.push({ kind: 'stairs_up', x: sx, y: sy, rot: 0, scale: 1, roomId: entranceId, flickerPhase: 0 });
+      const cell = findCellNear(entRoom.cx, entRoom.cy);
+      if (cell) {
+        baseDungeon.stairsUp = cell;
+        props.push({ kind: 'stairs_up', x: cell.x, y: cell.y, rot: 0, scale: 1, roomId: entranceId, flickerPhase: 0 });
       }
     }
   }
@@ -1220,7 +1242,12 @@ function connectivityOk(d: Dungeon): boolean {
 // ---- Public entry: generateDungeon with re-roll safety net ---------------
 export function generateDungeon(paramsIn: Partial<Params> = {}): Dungeon {
   const params: Params = { ...DEFAULT_PARAMS, ...paramsIn };
+  // For multi-level: derive a unique seed per floor so each level is different.
+  // The base seed is mixed with the level number via FNV-1a hash.
   let seed = params.seed >>> 0;
+  if (params.multiLevel && params.currentLevel > 0) {
+    seed = (hashString(`level:${params.currentLevel}:${seed}`) ^ 0x9e3779b9) >>> 0;
+  }
   let last: Dungeon | null = null;
   for (let attempt = 0; attempt < MAX_REROLL; attempt++) {
     const d = coreGenerate({ ...params, seed }, seed);
