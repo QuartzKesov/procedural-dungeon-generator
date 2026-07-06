@@ -14,8 +14,8 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Procedural Dungeon Generator — Isometric Three.js ARPG",
-  description: "A deterministic, allocation-conscious procedural dungeon generator with an isometric Three.js renderer: Bowyer-Watson Delaunay, Prim MST, mandatory loops, baked per-instance AO, budgeted torchlight, and a staged build animation.",
+  title: "Процедуральный генератор подземелий — изометрическая ARPG на Three.js",
+  description: "Детерминированный генератор подземелий с изометрическим рендерингом на Three.js: Делоне, MST, циклы, запечённый AO, факельный свет, поэтапная анимация сборки.",
   keywords: ["procedural generation", "Three.js", "isometric", "ARPG", "Delaunay", "dungeon", "WebGL"],
   authors: [{ name: "Z.ai" }],
   icons: {

@@ -21,7 +21,7 @@ class ErrorBoundary extends Component<{ children: ReactNode }, { error: Error | 
     if (this.state.error) {
       return (
         <div className="flex min-h-screen flex-col items-center justify-center gap-4 bg-[#0a0908] p-8 text-amber-200/80">
-          <h1 className="text-xl font-bold text-red-400">Render Error</h1>
+          <h1 className="text-xl font-bold text-red-400">Ошибка рендеринга</h1>
           <pre className="max-w-2xl overflow-auto rounded-lg border border-red-800/40 bg-black/60 p-4 text-xs text-red-300">
             {this.state.error.message}
             {'\n\n'}
@@ -31,7 +31,7 @@ class ErrorBoundary extends Component<{ children: ReactNode }, { error: Error | 
             onClick={() => this.setState({ error: null })}
             className="rounded-lg border border-amber-800/40 bg-amber-950/20 px-4 py-2 text-sm text-amber-300 hover:bg-amber-900/30"
           >
-            Retry
+            Повторить
           </button>
         </div>
       );
@@ -57,7 +57,7 @@ function LoadingScreen() {
         <div className="absolute inset-0 flex items-center justify-center text-2xl">⚜</div>
       </div>
       <p className="font-mono text-sm tracking-widest text-amber-200/60">
-        KINDLING THE TORCHES…
+        ЗАЖИГАЕМ ФАКЕЛЫ…
       </p>
     </div>
   );

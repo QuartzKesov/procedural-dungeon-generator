@@ -49,7 +49,7 @@ const ROOM_TYPE_COLOR: Record<string, string> = {
   boss: '#ff3a2a',
   treasure: '#ffd24a',
   shrine: '#40d0ff',
-  elite: '#ff7a3a',
+  элита: '#ff7a3a',
   combat: '#9a8a78',
 };
 
@@ -676,8 +676,8 @@ export function DungeonViewer() {
       ctx.lineTo(r.cx * sx + sx / 2 + 4, r.cy * sy + sy / 2);
       ctx.stroke();
     }
-    // elite: orange triangle
-    for (const r of d.rooms) if (r.type === 'elite') {
+    // элита: orange triangle
+    for (const r of d.rooms) if (r.type === 'элита') {
       ctx.fillStyle = '#ff7a3a';
       ctx.beginPath();
       ctx.moveTo(r.cx * sx + sx / 2, r.cy * sy + sy / 2 - 4);
@@ -777,7 +777,7 @@ export function DungeonViewer() {
     focusOnCellRef.current?.(gridX, gridY);
   }, [dungeon]);
 
-  // ---- quick-nav: focus entrance / boss ----
+  // ---- quick-nav: focus entrance / босс ----
   const focusEntrance = useCallback(() => {
     const r = activeDungeon.rooms[activeDungeon.entranceId];
     focusOnCellRef.current?.(r.cx, r.cy);
@@ -900,28 +900,28 @@ export function DungeonViewer() {
           <div className="mx-1 hidden h-5 w-px bg-amber-900/40 sm:block" />
           <button
             onClick={copyLink}
-            title="Copy shareable link"
+            title="Копировать ссылку"
             className={`pointer-events-auto flex h-7 w-7 items-center justify-center rounded-full border transition-colors ${copied ? 'border-emerald-600/50 bg-emerald-900/30 text-emerald-300' : 'border-amber-800/40 bg-amber-950/20 text-amber-300/70 hover:bg-amber-900/40 hover:text-amber-100'}`}
           >
             {copied ? <span className="text-xs">✓</span> : <Link2 className="h-3.5 w-3.5" />}
           </button>
           <button
             onClick={toggleAudio}
-            title="Ambient audio (M)"
+            title="Фоновый звук (M)"
             className={`pointer-events-auto flex h-7 w-7 items-center justify-center rounded-full border transition-colors ${audioOn ? 'border-amber-500/60 bg-amber-800/40 text-amber-100' : 'border-amber-800/40 bg-amber-950/20 text-amber-300/70 hover:bg-amber-900/40 hover:text-amber-100'}`}
           >
             {audioOn ? <Volume2 className="h-3.5 w-3.5" /> : <VolumeX className="h-3.5 w-3.5" />}
           </button>
           <button
             onClick={focusEntrance}
-            title="Focus entrance (E)"
+            title="Камера ко входу (E)"
             className="pointer-events-auto hidden h-7 w-7 items-center justify-center rounded-full border border-amber-800/40 bg-amber-950/20 text-amber-300/70 transition-colors hover:bg-blue-900/40 hover:text-blue-200 sm:flex"
           >
             <DoorOpen className="h-3.5 w-3.5" />
           </button>
           <button
             onClick={focusBoss}
-            title="Focus boss (B)"
+            title="Камера к боссу (B)"
             className="pointer-events-auto hidden h-7 w-7 items-center justify-center rounded-full border border-amber-800/40 bg-amber-950/20 text-amber-300/70 transition-colors hover:bg-red-900/40 hover:text-red-200 sm:flex"
           >
             <Skull className="h-3.5 w-3.5" />
@@ -929,35 +929,35 @@ export function DungeonViewer() {
           <div className="mx-1 hidden h-5 w-px bg-amber-900/40 md:block" />
           <button
             onClick={() => rotateCamera(-1)}
-            title="Rotate camera left (Q)"
+            title="Повернуть камеру влево (Q)"
             className="pointer-events-auto hidden h-7 w-7 items-center justify-center rounded-full border border-amber-800/40 bg-amber-950/20 text-amber-300/70 transition-colors hover:bg-amber-900/40 hover:text-amber-100 md:flex"
           >
             <RotateCw className="h-3.5 w-3.5 -scale-x-100" />
           </button>
           <button
             onClick={() => rotateCamera(1)}
-            title="Rotate camera right (T)"
+            title="Повернуть камеру вправо (T)"
             className="pointer-events-auto hidden h-7 w-7 items-center justify-center rounded-full border border-amber-800/40 bg-amber-950/20 text-amber-300/70 transition-colors hover:bg-amber-900/40 hover:text-amber-100 md:flex"
           >
             <RotateCw className="h-3.5 w-3.5" />
           </button>
           <button
             onClick={exportPng}
-            title="Export as PNG"
+            title="Экспорт в PNG"
             className="pointer-events-auto hidden h-7 w-7 items-center justify-center rounded-full border border-amber-800/40 bg-amber-950/20 text-amber-300/70 transition-colors hover:bg-emerald-900/40 hover:text-emerald-200 md:flex"
           >
             <Download className="h-3.5 w-3.5" />
           </button>
           <button
             onClick={() => setDayMode((v) => !v)}
-            title="Day/night mode"
+            title="Режим день/ночь"
             className={`pointer-events-auto hidden h-7 w-7 items-center justify-center rounded-full border transition-colors md:flex ${dayMode ? 'border-amber-400/60 bg-amber-500/30 text-amber-100' : 'border-amber-800/40 bg-amber-950/20 text-amber-300/70 hover:bg-amber-900/40 hover:text-amber-100'}`}
           >
             {dayMode ? <Sun className="h-3.5 w-3.5" /> : <Moon className="h-3.5 w-3.5" />}
           </button>
           <button
             onClick={() => setShowHelp(true)}
-            title="Keyboard shortcuts (?)"
+            title="Горячие клавиши (?)"
             className="pointer-events-auto flex h-7 w-7 items-center justify-center rounded-full border border-amber-800/40 bg-amber-950/20 text-amber-300/70 transition-colors hover:bg-amber-900/40 hover:text-amber-100"
           >
             <Keyboard className="h-3.5 w-3.5" />
@@ -970,10 +970,10 @@ export function DungeonViewer() {
 
       {/* Panel toggle buttons (mobile-friendly) */}
       <div className="absolute left-3 top-16 z-30 flex flex-col gap-2">
-        <TooltipButton active={leftOpen} onClick={() => setLeftOpen((v) => !v)} icon={<Layers className="h-4 w-4" />} label="Controls" />
+        <TooltipButton active={leftOpen} onClick={() => setLeftOpen((v) => !v)} icon={<Layers className="h-4 w-4" />} label="Управление" />
       </div>
       <div className="absolute right-3 top-16 z-30 flex flex-col gap-2">
-        <TooltipButton active={rightOpen} onClick={() => setRightOpen((v) => !v)} icon={<MapIcon className="h-4 w-4" />} label="Stats & Map" />
+        <TooltipButton active={rightOpen} onClick={() => setRightOpen((v) => !v)} icon={<MapIcon className="h-4 w-4" />} label="Статистика и карта" />
       </div>
 
       {/* Left panel: controls */}
@@ -981,9 +981,9 @@ export function DungeonViewer() {
         <aside className="absolute left-3 top-28 bottom-16 z-20 w-[min(20rem,calc(100vw-1.5rem))]">
           <ScrollArea className="h-full rounded-2xl border border-amber-900/40 bg-black/70 backdrop-blur-md">
             <div className="space-y-5 p-4">
-              <PanelTitle icon={<Zap className="h-4 w-4 text-amber-500" />} title="Generation" />
+              <PanelTitle icon={<Zap className="h-4 w-4 text-amber-500" />} title="Генерация" />
               <div className="space-y-2">
-                <Label className="text-xs uppercase tracking-wider text-amber-200/50">Seed</Label>
+                <Label className="text-xs uppercase tracking-wider text-amber-200/50">Сид</Label>
                 <div className="flex gap-2">
                   <Input
                     type="number"
@@ -991,22 +991,22 @@ export function DungeonViewer() {
                     onChange={(e) => setParams((p) => ({ ...p, seed: Math.max(0, parseInt(e.target.value || '0', 10)) >>> 0 }))}
                     className="border-amber-900/40 bg-amber-950/20 font-mono text-sm text-amber-100"
                   />
-                  <Button size="icon" variant="outline" onClick={rollDice} title="Roll dice (R)"
+                  <Button size="icon" variant="outline" onClick={rollDice} title="Случайный сид (R)"
                     className="border-amber-800/50 bg-amber-950/30 text-amber-300 hover:bg-amber-900/40 hover:text-amber-100">
                     <Dices className="h-4 w-4" />
                   </Button>
                 </div>
               </div>
 
-              <SliderRow label="Rooms" value={params.roomCount} min={8} max={80} step={1}
+              <SliderRow label="Комнаты" value={params.roomCount} min={8} max={80} step={1}
                 display={`${params.roomCount}`} onChange={(v) => setParams((p) => ({ ...p, roomCount: v }))} />
-              <SliderRow label="Loop Chance" value={params.loopChance} min={0} max={0.5} step={0.01}
+              <SliderRow label="Шанс циклов" value={params.loopChance} min={0} max={0.5} step={0.01}
                 display={params.loopChance.toFixed(2)} onChange={(v) => setParams((p) => ({ ...p, loopChance: v }))} />
-              <SliderRow label="Decor Density" value={params.decorDensity} min={0} max={1} step={0.05}
+              <SliderRow label="Плотность декора" value={params.decorDensity} min={0} max={1} step={0.05}
                 display={params.decorDensity.toFixed(2)} onChange={(v) => setParams((p) => ({ ...p, decorDensity: v }))} />
 
               <div className="space-y-2">
-                <Label className="text-xs uppercase tracking-wider text-amber-200/50">Theme</Label>
+                <Label className="text-xs uppercase tracking-wider text-amber-200/50">Тема</Label>
                 <Select value={params.theme} onValueChange={(v) => setParams((p) => ({ ...p, theme: v as Theme }))}>
                   <SelectTrigger className="border-amber-900/40 bg-amber-950/20 text-amber-100">
                     <SelectValue />
@@ -1020,12 +1020,12 @@ export function DungeonViewer() {
               </div>
 
               {/* ---- Event density slider ---- */}
-              <SliderRow label="Events" value={params.eventDensity} min={0} max={1} step={0.05}
+              <SliderRow label="События" value={params.eventDensity} min={0} max={1} step={0.05}
                 display={params.eventDensity.toFixed(2)} onChange={(v) => setParams((p) => ({ ...p, eventDensity: v }))} />
 
               {/* ---- Weather select ---- */}
               <div className="space-y-2">
-                <Label className="text-xs uppercase tracking-wider text-amber-200/50">Weather</Label>
+                <Label className="text-xs uppercase tracking-wider text-amber-200/50">Погода</Label>
                 <Select value={params.weather} onValueChange={(v) => setParams((p) => ({ ...p, weather: v as WeatherType }))}>
                   <SelectTrigger className="border-amber-900/40 bg-amber-950/20 text-amber-100">
                     <SelectValue />
@@ -1041,12 +1041,12 @@ export function DungeonViewer() {
               {/* ---- Multi-level toggle + level controls ---- */}
               <div className="space-y-2">
                 <div className="flex items-center justify-between rounded-lg border border-amber-900/30 bg-amber-950/10 px-3 py-1.5">
-                  <Label className="text-xs text-amber-100/80">Multi-Level</Label>
+                  <Label className="text-xs text-amber-100/80">Многоуровневый</Label>
                   <Switch checked={params.multiLevel} onCheckedChange={(v) => setParams((p) => ({ ...p, multiLevel: v, currentLevel: 0 }))} />
                 </div>
                 {params.multiLevel && (
                   <div className="space-y-2">
-                    <SliderRow label="Floors" value={params.levelCount} min={1} max={5} step={1}
+                    <SliderRow label="Этажей" value={params.levelCount} min={1} max={5} step={1}
                       display={`${params.levelCount}`} onChange={(v) => setParams((p) => ({ ...p, levelCount: v, currentLevel: 0 }))} />
                     <div className="flex items-center gap-2">
                       <span className="text-[10px] text-amber-300/50">Floor {params.currentLevel + 1}/{params.levelCount}</span>
@@ -1070,7 +1070,7 @@ export function DungeonViewer() {
               {/* seed history */}
               {seedHistory.length > 1 && (
                 <div className="space-y-1.5">
-                  <Label className="text-xs uppercase tracking-wider text-amber-200/50">Recent Seeds</Label>
+                  <Label className="text-xs uppercase tracking-wider text-amber-200/50">Недавние сиды</Label>
                   <div className="flex flex-wrap gap-1">
                     {seedHistory.map((s, i) => (
                       <button
@@ -1095,15 +1095,15 @@ export function DungeonViewer() {
               {/* ---- Export / Gallery / Compare buttons ---- */}
               <div className="grid grid-cols-3 gap-2">
                 <Button size="sm" variant="outline" onClick={() => downloadExport(dungeon, 'dungeon-json')}
-                  className="border-amber-800/40 bg-amber-950/20 text-xs text-amber-300 hover:bg-amber-900/30" title="Export as JSON">
+                  className="border-amber-800/40 bg-amber-950/20 text-xs text-amber-300 hover:bg-amber-900/30" title="Экспорт в JSON">
                   <FileJson className="mr-1 h-3.5 w-3.5" /> JSON
                 </Button>
                 <Button size="sm" variant="outline" onClick={() => downloadExport(dungeon, 'tiled')}
-                  className="border-amber-800/40 bg-amber-950/20 text-xs text-amber-300 hover:bg-amber-900/30" title="Export as Tiled">
+                  className="border-amber-800/40 bg-amber-950/20 text-xs text-amber-300 hover:bg-amber-900/30" title="Экспорт в Tiled">
                   <Layers className="mr-1 h-3.5 w-3.5" /> Tiled
                 </Button>
                 <Button size="sm" variant="outline" onClick={() => { setCompareSeed(params.seed); setShowCompare(true); }}
-                  className="border-amber-800/40 bg-amber-950/20 text-xs text-amber-300 hover:bg-amber-900/30" title="Compare two seeds">
+                  className="border-amber-800/40 bg-amber-950/20 text-xs text-amber-300 hover:bg-amber-900/30" title="Сравнить два сида">
                   <Columns2 className="mr-1 h-3.5 w-3.5" /> Compare
                 </Button>
               </div>
@@ -1118,7 +1118,7 @@ export function DungeonViewer() {
                   onClick={() => setShowPresets((v) => !v)}
                   className="flex w-full items-center justify-between rounded-lg border border-amber-900/30 bg-amber-950/10 px-3 py-1.5 text-xs text-amber-200/70 transition-colors hover:bg-amber-900/20"
                 >
-                  <span className="flex items-center gap-1.5"><Bookmark className="h-3.5 w-3.5" /> Presets</span>
+                  <span className="flex items-center gap-1.5"><Bookmark className="h-3.5 w-3.5" /> Пресеты</span>
                   <span className="font-mono text-[10px] text-amber-300/50">{presets.length} saved</span>
                 </button>
                 {showPresets && (
@@ -1127,18 +1127,18 @@ export function DungeonViewer() {
                       <Input
                         value={presetName}
                         onChange={(e) => setPresetName(e.target.value)}
-                        placeholder="Preset name…"
+                        placeholder="Название пресета…"
                         className="h-8 border-amber-900/40 bg-amber-950/20 text-xs text-amber-100"
                         onKeyDown={(e) => { if (e.key === 'Enter') savePreset(); }}
                       />
-                      <Button size="sm" onClick={savePreset} title="Save current params as preset"
+                      <Button size="sm" onClick={savePreset} title="Сохранить текущие параметры"
                         className="h-8 shrink-0 border-amber-700/50 bg-amber-800/40 px-2 text-amber-50 hover:bg-amber-700/50">
                         <Save className="h-3.5 w-3.5" />
                       </Button>
                     </div>
                     <div className="max-h-40 space-y-1 overflow-y-auto">
                       {presets.length === 0 && (
-                        <p className="py-2 text-center text-[10px] text-amber-300/40">No presets saved yet</p>
+                        <p className="py-2 text-center text-[10px] text-amber-300/40">Пресетов пока нет</p>
                       )}
                       {presets.map((p) => (
                         <div key={p.name} className="group flex items-center gap-1 rounded border border-amber-900/20 bg-amber-950/20 px-2 py-1">
@@ -1146,7 +1146,7 @@ export function DungeonViewer() {
                             <div className="truncate text-[11px] text-amber-100/80">{p.name}</div>
                             <div className="font-mono text-[9px] text-amber-300/40">seed {p.params.seed} · {p.params.roomCount}r · {p.params.theme}</div>
                           </button>
-                          <button onClick={() => deletePreset(p.name)} title="Delete preset"
+                          <button onClick={() => deletePreset(p.name)} title="Удалить пресет"
                             className="shrink-0 text-amber-300/30 opacity-0 transition-opacity hover:text-red-400 group-hover:opacity-100">
                             <Trash2 className="h-3 w-3" />
                           </button>
@@ -1161,7 +1161,7 @@ export function DungeonViewer() {
 
               <PanelTitle icon={<Play className="h-4 w-4 text-amber-500" />} title="Animation" />
               <div className="flex items-center justify-between rounded-lg border border-amber-900/30 bg-amber-950/10 px-3 py-2">
-                <Label htmlFor="anim" className="text-sm text-amber-100/80">Staged Build</Label>
+                <Label htmlFor="anim" className="text-sm text-amber-100/80">Поэтапная сборка</Label>
                 <Switch id="anim" checked={animateBuild} onCheckedChange={setAnimateBuild} />
               </div>
               <Button variant="outline" onClick={replayBuild} className="w-full border-amber-800/40 bg-amber-950/20 text-amber-200 hover:bg-amber-900/30">
@@ -1173,29 +1173,29 @@ export function DungeonViewer() {
               {/* ---- Level Editor ---- */}
               <PanelTitle icon={<Layers className="h-4 w-4 text-amber-500" />} title="Level Editor" />
               <div className="flex items-center justify-between rounded-lg border border-amber-900/30 bg-amber-950/10 px-3 py-1.5">
-                <Label className="text-xs text-amber-100/80">Edit Mode</Label>
+                <Label className="text-xs text-amber-100/80">Режим редактирования</Label>
                 <Switch checked={editorState.enabled} onCheckedChange={toggleEditor} />
               </div>
               {editorState.enabled && (
                 <div className="space-y-3 rounded-lg border border-amber-900/30 bg-black/40 p-3">
                   {/* Tool selection grid */}
                   <div>
-                    <Label className="mb-1.5 block text-[10px] uppercase tracking-wider text-amber-200/50">Tools</Label>
+                    <Label className="mb-1.5 block text-[10px] uppercase tracking-wider text-amber-200/50">Инструменты</Label>
                     <div className="grid grid-cols-4 gap-1">
                       {([
-                        { t: 'floor', l: 'Floor', c: '#6a6258' },
-                        { t: 'wall', l: 'Wall', c: '#2a2620' },
-                        { t: 'erase', l: 'Erase', c: '#05040a' },
-                        { t: 'select', l: 'Select', c: '#ffffff' },
-                        { t: 'room_rect', l: 'Room ▭', c: '#8a5a2a' },
-                        { t: 'room_ellipse', l: 'Room ○', c: '#8a5a2a' },
-                        { t: 'room_octagon', l: 'Room ⬡', c: '#8a5a2a' },
-                        { t: 'torch', l: 'Torch', c: '#ffb24a' },
-                        { t: 'chest', l: 'Chest', c: '#8a5a2a' },
-                        { t: 'pillar', l: 'Pillar', c: '#6b6258' },
-                        { t: 'crystal', l: 'Crystal', c: '#6ad0ff' },
-                        { t: 'trap', l: 'Trap', c: '#8a3a3a' },
-                        { t: 'teleport', l: 'Teleport', c: '#dd44ff' },
+                        { t: 'floor', l: 'Пол', c: '#6a6258' },
+                        { t: 'wall', l: 'Стена', c: '#2a2620' },
+                        { t: 'erase', l: 'Стереть', c: '#05040a' },
+                        { t: 'select', l: 'Выбор', c: '#ffffff' },
+                        { t: 'room_rect', l: 'Комната ▭', c: '#8a5a2a' },
+                        { t: 'room_ellipse', l: 'Комната ○', c: '#8a5a2a' },
+                        { t: 'room_octagon', l: 'Комната ⬡', c: '#8a5a2a' },
+                        { t: 'torch', l: 'Факел', c: '#ffb24a' },
+                        { t: 'chest', l: 'Сундук', c: '#8a5a2a' },
+                        { t: 'pillar', l: 'Колонна', c: '#6b6258' },
+                        { t: 'crystal', l: 'Кристалл', c: '#6ad0ff' },
+                        { t: 'trap', l: 'Ловушка', c: '#8a3a3a' },
+                        { t: 'teleport', l: 'Телепорт', c: '#dd44ff' },
                       ] as Array<{ t: EditTool; l: string; c: string }>).map((tool) => (
                         <button
                           key={tool.t}
@@ -1215,12 +1215,12 @@ export function DungeonViewer() {
                   </div>
                   {/* Brush size (for floor/wall/erase) */}
                   {(editorState.tool === 'floor' || editorState.tool === 'wall' || editorState.tool === 'erase') && (
-                    <SliderRow label="Brush Size" value={editorState.brushSize} min={1} max={5} step={1}
+                    <SliderRow label="Размер кисти" value={editorState.brushSize} min={1} max={5} step={1}
                       display={`${editorState.brushSize}`} onChange={(v) => setEditorState((s) => ({ ...s, brushSize: v }))} />
                   )}
                   {/* Room size (for room stamping) */}
                   {(editorState.tool === 'room_rect' || editorState.tool === 'room_ellipse' || editorState.tool === 'room_octagon') && (
-                    <SliderRow label="Room Size" value={editorState.roomSize} min={3} max={15} step={1}
+                    <SliderRow label="Размер комнаты" value={editorState.roomSize} min={3} max={15} step={1}
                       display={`${editorState.roomSize}`} onChange={(v) => setEditorState((s) => ({ ...s, roomSize: v }))} />
                   )}
                   {/* Undo/Redo */}
@@ -1239,7 +1239,7 @@ export function DungeonViewer() {
                     <Input
                       value={editSaveName}
                       onChange={(e) => setEditSaveName(e.target.value)}
-                      placeholder="Layout name…"
+                      placeholder="Название…"
                       className="h-7 border-amber-900/40 bg-amber-950/20 text-xs text-amber-100"
                     />
                     <Button size="sm" onClick={() => {
@@ -1252,7 +1252,7 @@ export function DungeonViewer() {
                     </Button>
                   </div>
                   <p className="text-center text-[9px] text-amber-300/30">
-                    Click on the 3D view to place/edit
+                    Кликните по 3D-виду для размещения/редактирования
                   </p>
                 </div>
               )}
@@ -1261,12 +1261,12 @@ export function DungeonViewer() {
 
               <PanelTitle icon={<Eye className="h-4 w-4 text-amber-500" />} title="Debug Overlays" />
               <div className="space-y-2">
-                <ToggleRow label="Critical Path" color="#ff3030" checked={overlays.critical} onCheckedChange={(v) => setOverlays((o) => ({ ...o, critical: v }))} />
-                <ToggleRow label="Loop Edges" color="#33e0ff" checked={overlays.loops} onCheckedChange={(v) => setOverlays((o) => ({ ...o, loops: v }))} />
-                <ToggleRow label="MST (Skeleton)" color="#ffffff" checked={overlays.mst} onCheckedChange={(v) => setOverlays((o) => ({ ...o, mst: v }))} />
-                <ToggleRow label="Delaunay (proximity)" color="#88aaff" checked={overlays.delaunay} onCheckedChange={(v) => setOverlays((o) => ({ ...o, delaunay: v }))} />
-                <ToggleRow label="Difficulty Heatmap" color="#ffaa00" checked={overlays.difficulty} onCheckedChange={(v) => setOverlays((o) => ({ ...o, difficulty: v }))} />
-                <ToggleRow label="Enemy Patrols" color="#ffcc44" checked={overlays.patrols} onCheckedChange={(v) => setOverlays((o) => ({ ...o, patrols: v }))} />
+                <ToggleRow label="Критический путь" color="#ff3030" checked={overlays.critical} onCheckedChange={(v) => setOverlays((o) => ({ ...o, critical: v }))} />
+                <ToggleRow label="Циклы" color="#33e0ff" checked={overlays.loops} onCheckedChange={(v) => setOverlays((o) => ({ ...o, loops: v }))} />
+                <ToggleRow label="MST (Скелет)" color="#ffffff" checked={overlays.mst} onCheckedChange={(v) => setOverlays((o) => ({ ...o, mst: v }))} />
+                <ToggleRow label="Делоне (близость)" color="#88aaff" checked={overlays.delaunay} onCheckedChange={(v) => setOverlays((o) => ({ ...o, delaunay: v }))} />
+                <ToggleRow label="Тепловая карта сложности" color="#ffaa00" checked={overlays.difficulty} onCheckedChange={(v) => setOverlays((o) => ({ ...o, difficulty: v }))} />
+                <ToggleRow label="Маршруты патрулей" color="#ffcc44" checked={overlays.patrols} onCheckedChange={(v) => setOverlays((o) => ({ ...o, patrols: v }))} />
               </div>
             </div>
           </ScrollArea>
@@ -1299,10 +1299,10 @@ export function DungeonViewer() {
                     state.camera.updateProjectionMatrix();
                   }}
                   className="h-auto w-full cursor-crosshair"
-                  title="Click to focus · scroll to zoom"
+                  title="Клик — фокус · скролл — зум"
                 />
                 <div className="pointer-events-none absolute right-3 top-3 rounded bg-black/70 px-1.5 py-0.5 text-[9px] text-amber-300/50 opacity-0 transition-opacity group-hover:opacity-100">
-                  click to focus · scroll to zoom
+                  клик — фокус · скролл — зум
                 </div>
               </div>
               {/* quick-nav buttons */}
@@ -1321,25 +1321,25 @@ export function DungeonViewer() {
 
               <PanelTitle icon={<Zap className="h-4 w-4 text-amber-500" />} title="Stats" />
               <div className="grid grid-cols-2 gap-x-3 gap-y-1.5 font-mono text-xs">
-                <Stat k="Grid" v={`${activeDungeon.W}×${activeDungeon.H}`} />
-                <AnimatedStat k="Rooms" v={stats.rooms} />
-                <AnimatedStat k="Edges" v={stats.edges} />
-                <AnimatedStat k="Loops" v={stats.loops} highlight />
-                <AnimatedStat k="Critical" v={stats.criticalLength} suffix=" hops" />
-                <AnimatedStat k="Max Depth" v={stats.maxDepth} />
-                <AnimatedStat k="Floor" v={stats.floorTiles} />
-                <AnimatedStat k="Wall" v={stats.wallTiles} />
-                <AnimatedStat k="Props" v={stats.props} />
-                <AnimatedStat k="Spawns" v={stats.spawns} />
-                <Stat k="Lights" v={`${stats.lights}/12`} />
-                <Stat k="Gen" v={`${stats.genMs.toFixed(1)}ms`} highlight />
+                <Stat k="Сетка" v={`${activeDungeon.W}×${activeDungeon.H}`} />
+                <AnimatedStat k="Комнат" v={stats.rooms} />
+                <AnimatedStat k="Рёбер" v={stats.edges} />
+                <AnimatedStat k="Циклов" v={stats.loops} highlight />
+                <AnimatedStat k="Критич." v={stats.criticalLength} suffix=" шагов" />
+                <AnimatedStat k="Макс. глубина" v={stats.maxDepth} />
+                <AnimatedStat k="Пол" v={stats.floorTiles} />
+                <AnimatedStat k="Стены" v={stats.wallTiles} />
+                <AnimatedStat k="Объекты" v={stats.props} />
+                <AnimatedStat k="Враги" v={stats.spawns} />
+                <Stat k="Свет" v={`${stats.lights}/12`} />
+                <Stat k="Ген." v={`${stats.genMs.toFixed(1)}ms`} highlight />
               </div>
               <div className="rounded-lg border border-amber-900/20 bg-amber-950/10 p-2 font-mono text-[10px] text-amber-300/40">
-                checksum: {stats.checksum.toString(16).padStart(8, '0')}
+                контрольная сумма: {stats.checksum.toString(16).padStart(8, '0')}
               </div>
               {/* shape distribution */}
               <div>
-                <Label className="mb-1.5 block text-xs uppercase tracking-wider text-amber-200/50">Room Shapes</Label>
+                <Label className="mb-1.5 block text-xs uppercase tracking-wider text-amber-200/50">Формы комнат</Label>
                 <div className="flex flex-wrap gap-1">
                   {Object.entries(activeDungeon.rooms.reduce((m, r) => { m[r.shape] = (m[r.shape] ?? 0) + 1; return m; }, {} as Record<string, number>)).sort().map(([s, n]) => (
                     <span key={s} className="rounded border border-amber-900/30 bg-amber-950/20 px-1.5 py-0.5 text-[9px] text-amber-200/60">
@@ -1350,7 +1350,7 @@ export function DungeonViewer() {
               </div>
 
               <div>
-                <Label className="mb-1.5 block text-xs uppercase tracking-wider text-amber-200/50">Rooms by Type</Label>
+                <Label className="mb-1.5 block text-xs uppercase tracking-wider text-amber-200/50">Комнаты по типам</Label>
                 <div className="space-y-1">
                   {Object.entries(typeCounts).sort().map(([t, n]) => {
                     const color = ROOM_TYPE_COLOR[t] ?? '#666';
@@ -1378,14 +1378,14 @@ export function DungeonViewer() {
                   onClick={() => setShowRoomList((v) => !v)}
                   className="flex w-full items-center justify-between rounded-lg border border-amber-900/30 bg-amber-950/10 px-3 py-1.5 text-xs text-amber-200/70 transition-colors hover:bg-amber-900/20"
                 >
-                  <span className="flex items-center gap-1.5"><List className="h-3.5 w-3.5" /> Room List</span>
+                  <span className="flex items-center gap-1.5"><List className="h-3.5 w-3.5" /> Список комнат</span>
                   <span className="font-mono text-[10px] text-amber-300/50">{activeDungeon.rooms.length} rooms</span>
                 </button>
                 {showRoomList && (
                   <div className="space-y-2 rounded-lg border border-amber-900/30 bg-black/40 p-2">
                     {/* filter buttons */}
                     <div className="flex flex-wrap gap-1">
-                      {['all', 'entrance', 'boss', 'treasure', 'shrine', 'elite', 'combat'].map((t) => (
+                      {['all', 'entrance', 'boss', 'treasure', 'shrine', 'элита', 'combat'].map((t) => (
                         <button
                           key={t}
                           onClick={() => setRoomListFilter(t)}
@@ -1433,7 +1433,7 @@ export function DungeonViewer() {
               <PanelTitle icon={<FlaskConical className="h-4 w-4 text-amber-500" />} title="Acceptance Tests" />
               <div className={`mb-2 flex items-center gap-2 rounded-lg border px-3 py-1.5 text-xs font-medium ${allTestsPass ? 'border-emerald-700/40 bg-emerald-950/20 text-emerald-300' : 'border-red-700/40 bg-red-950/20 text-red-300'}`}>
                 {allTestsPass ? <Eye className="h-3.5 w-3.5" /> : <EyeOff className="h-3.5 w-3.5" />}
-                {testResults.filter((t) => t.pass).length + (perfResult?.pass ? 1 : 0)}/{testResults.length + 1} passing
+                {testResults.filter((t) => t.pass).length + (perfResult?.pass ? 1 : 0)}/{testResults.length + 1} пройдено
               </div>
               <div className="space-y-1.5">
                 {testResults.map((t, i) => <TestRow key={i} t={t} />)}
@@ -1445,49 +1445,49 @@ export function DungeonViewer() {
               <PanelTitle icon={<Sparkles className="h-4 w-4 text-amber-500" />} title="Legend" />
               <div className="space-y-2">
                 <div className="rounded-lg border border-amber-900/20 bg-amber-950/10 p-2">
-                  <div className="mb-1 text-[9px] uppercase tracking-wider text-amber-300/40">Geometry</div>
+                  <div className="mb-1 text-[9px] uppercase tracking-wider text-amber-300/40">Геометрия</div>
                   <div className="grid grid-cols-2 gap-x-2 gap-y-1 text-[11px] text-amber-100/70">
-                    <LegendDot color="#6a6258" label="Floor" />
-                    <LegendDot color="#2a2620" label="Wall" />
+                    <LegendDot color="#6a6258" label="Пол" />
+                    <LegendDot color="#2a2620" label="Стена" />
                   </div>
                 </div>
                 <div className="rounded-lg border border-amber-900/20 bg-amber-950/10 p-2">
-                  <div className="mb-1 text-[9px] uppercase tracking-wider text-amber-300/40">Props</div>
+                  <div className="mb-1 text-[9px] uppercase tracking-wider text-amber-300/40">Объекты</div>
                   <div className="grid grid-cols-2 gap-x-2 gap-y-1 text-[11px] text-amber-100/70">
-                    <LegendDot color="#ffb24a" label="Torch / Flame" />
-                    <LegendDot color="#ff9a3a" label="Brazier" />
-                    <LegendDot color="#8a5a2a" label="Chest" />
-                    <LegendDot color="#6ad0ff" label="Crystal" />
-                    <LegendDot color="#8aa8ff" label="Portal" />
+                    <LegendDot color="#ffb24a" label="Факел / пламя" />
+                    <LegendDot color="#ff9a3a" label="Жаровня" />
+                    <LegendDot color="#8a5a2a" label="Сундук" />
+                    <LegendDot color="#6ad0ff" label="Кристалл" />
+                    <LegendDot color="#8aa8ff" label="Портал" />
                   </div>
                 </div>
                 <div className="rounded-lg border border-amber-900/20 bg-amber-950/10 p-2">
-                  <div className="mb-1 text-[9px] uppercase tracking-wider text-amber-300/40">Spawns & Glows</div>
+                  <div className="mb-1 text-[9px] uppercase tracking-wider text-amber-300/40">Враги и свечение</div>
                   <div className="grid grid-cols-2 gap-x-2 gap-y-1 text-[11px] text-amber-100/70">
-                    <LegendDot color="#88ff88" label="Trash" />
-                    <LegendDot color="#ff5544" label="Elite" />
-                    <LegendDot color="#ff2222" label="Boss" />
-                    <LegendDot color="#4060ff" label="Entrance Glow" />
-                    <LegendDot color="#ff2a1a" label="Boss Glow" />
+                    <LegendDot color="#88ff88" label="Мусор" />
+                    <LegendDot color="#ff5544" label="Элита" />
+                    <LegendDot color="#ff2222" label="Босс" />
+                    <LegendDot color="#4060ff" label="Свечение входа" />
+                    <LegendDot color="#ff2a1a" label="Свечение босса" />
                   </div>
                 </div>
                 <div className="rounded-lg border border-amber-900/20 bg-amber-950/10 p-2">
-                  <div className="mb-1 text-[9px] uppercase tracking-wider text-amber-300/40">Overlays</div>
+                  <div className="mb-1 text-[9px] uppercase tracking-wider text-amber-300/40">Слои</div>
                   <div className="grid grid-cols-2 gap-x-2 gap-y-1 text-[11px] text-amber-100/70">
-                    <LegendDot color="#ff3030" label="Critical Path" />
-                    <LegendDot color="#33e0ff" label="Loop Edge" />
-                    <LegendDot color="#ffdd33" label="Patrol Route" />
+                    <LegendDot color="#ff3030" label="Критический путь" />
+                    <LegendDot color="#33e0ff" label="Ребро цикла" />
+                    <LegendDot color="#ffdd33" label="Маршрут патруля" />
                   </div>
                 </div>
               </div>
               <p className="pt-1 text-[10px] leading-relaxed text-amber-200/40">
-                Scroll/pinch to zoom · drag to pan · click minimap to focus ·
-                <span className="font-mono text-amber-300/60"> R</span> dice ·
-                <span className="font-mono text-amber-300/60"> E</span> entrance ·
-                <span className="font-mono text-amber-300/60"> B</span> boss ·
-                <span className="font-mono text-amber-300/60"> Q</span>/<span className="font-mono text-amber-300/60">T</span> rotate ·
-                <span className="font-mono text-amber-300/60"> M</span> audio ·
-                <span className="font-mono text-amber-300/60"> Space</span> replay
+                Скролл/пинч — зум · перетаскивание — панорама · клик по миникарте — фокус ·
+                <span className="font-mono text-amber-300/60"> R</span> случайный сид ·
+                <span className="font-mono text-amber-300/60"> E</span> вход ·
+                <span className="font-mono text-amber-300/60"> B</span> босс ·
+                <span className="font-mono text-amber-300/60"> Q</span>/<span className="font-mono text-amber-300/60">T</span> поворот ·
+                <span className="font-mono text-amber-300/60"> M</span> звук ·
+                <span className="font-mono text-amber-300/60"> Space</span> повтор 
               </p>
             </div>
           </ScrollArea>
@@ -1539,9 +1539,9 @@ export function DungeonViewer() {
       {/* Sticky footer */}
       <footer className="z-10 mt-auto border-t border-amber-900/30 bg-black/80 px-4 py-2 backdrop-blur-md">
         <div className="mx-auto flex max-w-7xl flex-wrap items-center justify-between gap-2 text-[11px] text-amber-200/50">
-          <span className="font-serif tracking-wide">Procedural Dungeon Generator · Isometric Three.js ARPG</span>
+          <span className="font-serif tracking-wide">Процедуральный генератор подземелий · Изометрическая ARPG на Three.js</span>
           <span className="font-mono">
-            {activeDungeon.rooms.length} rooms · {stats.loops} loops · {stats.floorTiles} floor tiles · {stats.genMs.toFixed(1)} ms
+            {activeDungeon.rooms.length} комнат · {stats.loops} циклов · {stats.floorTiles} плиток пола · {stats.genMs.toFixed(1)} мс
           </span>
         </div>
       </footer>
@@ -1552,16 +1552,16 @@ export function DungeonViewer() {
 // ---- Keyboard Help Overlay (modal showing all shortcuts) ----
 function HelpOverlay({ onClose }: { onClose: () => void }) {
   const shortcuts: Array<{ key: string; desc: string }> = [
-    { key: 'R', desc: 'Roll random seed (dice)' },
-    { key: 'G', desc: 'Regenerate dungeon' },
-    { key: 'E', desc: 'Focus camera on entrance' },
-    { key: 'B', desc: 'Focus camera on boss' },
-    { key: 'Q', desc: 'Rotate camera left (45°)' },
-    { key: 'T', desc: 'Rotate camera right (45°)' },
-    { key: 'Space', desc: 'Replay staged build animation' },
-    { key: 'M', desc: 'Toggle ambient audio' },
-    { key: '?', desc: 'Toggle this help overlay' },
-    { key: 'Esc', desc: 'Close help / deselect room' },
+    { key: 'R', desc: 'Случайный сид (кубик)' },
+    { key: 'G', desc: 'Перегенерировать подземелье' },
+    { key: 'E', desc: 'Камера ко входу' },
+    { key: 'B', desc: 'Камера к боссу' },
+    { key: 'Q', desc: 'Поворот камеры влево (45°)' },
+    { key: 'T', desc: 'Поворот камеры вправо (45°)' },
+    { key: 'Space', desc: 'Повтор анимации сборки' },
+    { key: 'M', desc: 'Включить или выключить звук' },
+    { key: '?', desc: 'Показать или скрыть справку' },
+    { key: 'Esc', desc: 'Закрыть справку, снять выделение' },
   ];
   return (
     <div
@@ -1576,7 +1576,7 @@ function HelpOverlay({ onClose }: { onClose: () => void }) {
           <div className="mb-4 flex items-center justify-between">
             <div className="flex items-center gap-2">
               <Keyboard className="h-5 w-5 text-amber-500" />
-              <h2 className="font-serif text-base text-amber-100">Keyboard Shortcuts</h2>
+              <h2 className="font-serif text-base text-amber-100">Горячие клавиши</h2>
             </div>
             <button onClick={onClose} className="text-amber-300/50 hover:text-amber-100">
               <X className="h-5 w-5" />
@@ -1593,10 +1593,10 @@ function HelpOverlay({ onClose }: { onClose: () => void }) {
             ))}
           </div>
           <div className="mt-4 rounded-lg border border-amber-900/20 bg-amber-950/10 p-3 text-[11px] text-amber-200/40">
-            <div className="mb-1 font-mono text-[9px] uppercase tracking-wider text-amber-300/40">Mouse / Touch</div>
-            <div>Scroll / pinch — zoom · Drag — pan · Click room — inspect · Click minimap — focus camera</div>
+            <div className="mb-1 font-mono text-[9px] uppercase tracking-wider text-amber-300/40">Мышь / Тач</div>
+            <div>Скролл/пинч — зум · Перетаскивание — панорама · Клик по комнате — осмотр · Клик по миникарте — фокус</div>
           </div>
-          <p className="mt-3 text-center text-[10px] text-amber-300/30">Press <kbd className="font-mono">?</kbd> or <kbd className="font-mono">Esc</kbd> to close</p>
+          <p className="mt-3 text-center text-[10px] text-amber-300/30">Нажмите <kbd className="font-mono">?</kbd> or <kbd className="font-mono">Esc</kbd> чтобы закрыть</p>
         </div>
       </div>
     </div>
@@ -1625,14 +1625,14 @@ function CompareOverlay({ dungeonA, seedB, params, onClose, onSeedBChange }: {
       <div className="pointer-events-auto w-[min(40rem,calc(100vw-2rem))] animate-in fade-in zoom-in-95 duration-200" onClick={(e) => e.stopPropagation()}>
         <div className="rounded-2xl border border-amber-800/50 bg-black/90 p-6 shadow-2xl backdrop-blur-md">
           <div className="mb-4 flex items-center justify-between">
-            <h2 className="font-serif text-base text-amber-100">Seed Comparison</h2>
+            <h2 className="font-serif text-base text-amber-100">Сравнение сидов</h2>
             <button onClick={onClose} className="text-amber-300/50 hover:text-amber-100"><X className="h-5 w-5" /></button>
           </div>
           <div className="mb-3 flex items-center gap-2">
-            <span className="text-xs text-amber-200/50">Seed A:</span>
+            <span className="text-xs text-amber-200/50">Сид A:</span>
             <span className="font-mono text-xs text-amber-100">{dungeonA.params.seed}</span>
             <span className="mx-2 text-amber-300/30">|</span>
-            <span className="text-xs text-amber-200/50">Seed B:</span>
+            <span className="text-xs text-amber-200/50">Сид B:</span>
             <Input type="number" value={seedB} onChange={(e) => onSeedBChange(Math.max(0, parseInt(e.target.value || '0', 10)) >>> 0)}
               className="h-7 w-24 border-amber-900/40 bg-amber-950/20 font-mono text-xs text-amber-100" />
             <Button size="sm" variant="outline" onClick={() => onSeedBChange(Math.floor(Math.random() * 1e9) >>> 0)}
@@ -1641,16 +1641,16 @@ function CompareOverlay({ dungeonA, seedB, params, onClose, onSeedBChange }: {
             </Button>
           </div>
           <div className="grid grid-cols-[auto_1fr_auto_1fr] gap-x-3">
-            <CompareStat k="Rooms" a={dungeonA.stats.rooms} b={dungeonB.stats.rooms} />
-            <CompareStat k="Loops" a={dungeonA.stats.loops} b={dungeonB.stats.loops} />
-            <CompareStat k="Floor" a={dungeonA.stats.floorTiles} b={dungeonB.stats.floorTiles} />
-            <CompareStat k="Wall" a={dungeonA.stats.wallTiles} b={dungeonB.stats.wallTiles} />
-            <CompareStat k="Props" a={dungeonA.stats.props} b={dungeonB.stats.props} />
-            <CompareStat k="Spawns" a={dungeonA.stats.spawns} b={dungeonB.stats.spawns} />
+            <CompareStat k="Комнат" a={dungeonA.stats.rooms} b={dungeonB.stats.rooms} />
+            <CompareStat k="Циклов" a={dungeonA.stats.loops} b={dungeonB.stats.loops} />
+            <CompareStat k="Пол" a={dungeonA.stats.floorTiles} b={dungeonB.stats.floorTiles} />
+            <CompareStat k="Стены" a={dungeonA.stats.wallTiles} b={dungeonB.stats.wallTiles} />
+            <CompareStat k="Объекты" a={dungeonA.stats.props} b={dungeonB.stats.props} />
+            <CompareStat k="Враги" a={dungeonA.stats.spawns} b={dungeonB.stats.spawns} />
             <CompareStat k="Events" a={dungeonA.stats.events} b={dungeonB.stats.events} />
-            <CompareStat k="Max Depth" a={dungeonA.stats.maxDepth} b={dungeonB.stats.maxDepth} />
-            <CompareStat k="Critical" a={`${dungeonA.stats.criticalLength}h`} b={`${dungeonB.stats.criticalLength}h`} />
-            <CompareStat k="Gen" a={`${dungeonA.stats.genMs.toFixed(1)}ms`} b={`${dungeonB.stats.genMs.toFixed(1)}ms`} />
+            <CompareStat k="Макс. глубина" a={dungeonA.stats.maxDepth} b={dungeonB.stats.maxDepth} />
+            <CompareStat k="Критич." a={`${dungeonA.stats.criticalLength}h`} b={`${dungeonB.stats.criticalLength}h`} />
+            <CompareStat k="Ген." a={`${dungeonA.stats.genMs.toFixed(1)}ms`} b={`${dungeonB.stats.genMs.toFixed(1)}ms`} />
           </div>
           <div className="mt-3 grid grid-cols-2 gap-4">
             <div>
@@ -1677,11 +1677,11 @@ function GalleryOverlay({ presets, onClose, onLoad }: {
       <div className="pointer-events-auto w-[min(44rem,calc(100vw-2rem))] max-h-[80vh] animate-in fade-in zoom-in-95 duration-200" onClick={(e) => e.stopPropagation()}>
         <div className="rounded-2xl border border-amber-800/50 bg-black/90 p-6 shadow-2xl backdrop-blur-md">
           <div className="mb-4 flex items-center justify-between">
-            <h2 className="font-serif text-base text-amber-100">Gallery</h2>
+            <h2 className="font-serif text-base text-amber-100">Галерея</h2>
             <button onClick={onClose} className="text-amber-300/50 hover:text-amber-100"><X className="h-5 w-5" /></button>
           </div>
           {presets.length === 0 ? (
-            <p className="py-8 text-center text-sm text-amber-300/40">No saved presets yet. Save some from the left panel!</p>
+            <p className="py-8 text-center text-sm text-amber-300/40">Нет сохранённых пресетов. Сохраните их в левой панели!</p>
           ) : (
             <div className="grid max-h-96 grid-cols-2 gap-3 overflow-y-auto sm:grid-cols-3">
               {presets.map((p) => {
@@ -1723,7 +1723,7 @@ function MinimapThumb({ dungeon }: { dungeon: Dungeon }) {
     }
     const colors: Record<string, string> = {
       entrance: '#6a8cff', boss: '#ff3a2a', treasure: '#ffd24a',
-      shrine: '#40d0ff', elite: '#ff7a3a', combat: '#9a8a78',
+      shrine: '#40d0ff', элита: '#ff7a3a', combat: '#9a8a78',
     };
     for (let y = 0; y < d.H; y++) {
       for (let x = 0; x < d.W; x++) {
@@ -1880,9 +1880,9 @@ function RoomHoverTooltip({ room, x, y }: { room: Dungeon['rooms'][number]; x: n
           <span className="ml-auto font-mono text-[9px] text-amber-300/40">#{room.id}</span>
         </div>
         <div className="mt-1.5 space-y-0.5 font-mono text-[9px] text-amber-200/60">
-          <div className="flex justify-between"><span>shape</span><span className="text-amber-100/70">{room.shape}</span></div>
-          <div className="flex justify-between"><span>depth</span><span className="text-amber-100/70">{room.depth}</span></div>
-          <div className="flex justify-between"><span>diff</span><span style={{ color: typeColor }}>{(room.difficulty * 100).toFixed(0)}%</span></div>
+          <div className="flex justify-between"><span>форма</span><span className="text-amber-100/70">{room.shape}</span></div>
+          <div className="flex justify-between"><span>глубина</span><span className="text-amber-100/70">{room.depth}</span></div>
+          <div className="flex justify-between"><span>сложн.</span><span style={{ color: typeColor }}>{(room.difficulty * 100).toFixed(0)}%</span></div>
         </div>
         <div className="mt-1.5 h-1 overflow-hidden rounded-full bg-black/50">
           <div className="h-full rounded-full" style={{
@@ -1890,7 +1890,7 @@ function RoomHoverTooltip({ room, x, y }: { room: Dungeon['rooms'][number]; x: n
             background: `linear-gradient(90deg, #22c55e, #eab308, #ef4444)`,
           }} />
         </div>
-        <div className="mt-1.5 text-center text-[8px] text-amber-300/30">click to inspect</div>
+        <div className="mt-1.5 text-center text-[8px] text-amber-300/30">кликните для осмотра</div>
       </div>
     </div>
   );
@@ -1924,12 +1924,12 @@ function RoomInspector({ room, dungeon, onClose, onFocus }: {
           </button>
         </div>
         <div className="grid grid-cols-2 gap-x-3 gap-y-1.5 font-mono text-[11px]">
-          <div className="flex justify-between"><span className="text-amber-200/40">Center</span><span className="text-amber-100/80">{room.cx}, {room.cy}</span></div>
-          <div className="flex justify-between"><span className="text-amber-200/40">Size</span><span className="text-amber-100/80">{room.w}×{room.h}</span></div>
-          <div className="flex justify-between"><span className="text-amber-200/40">Depth</span><span className="text-amber-100/80">{room.depth}</span></div>
-          <div className="flex justify-between"><span className="text-amber-200/40">Difficulty</span><span className={isBoss ? 'text-red-400' : 'text-amber-100/80'}>{(room.difficulty * 100).toFixed(0)}%</span></div>
+          <div className="flex justify-between"><span className="text-amber-200/40">Центр</span><span className="text-amber-100/80">{room.cx}, {room.cy}</span></div>
+          <div className="flex justify-between"><span className="text-amber-200/40">Размер</span><span className="text-amber-100/80">{room.w}×{room.h}</span></div>
+          <div className="flex justify-between"><span className="text-amber-200/40">Глубина</span><span className="text-amber-100/80">{room.depth}</span></div>
+          <div className="flex justify-between"><span className="text-amber-200/40">Сложность</span><span className={isBoss ? 'text-red-400' : 'text-amber-100/80'}>{(room.difficulty * 100).toFixed(0)}%</span></div>
           <div className="flex justify-between"><span className="text-amber-200/40">Spawns</span><span className="text-amber-100/80">{spawnsInRoom.length}</span></div>
-          <div className="flex justify-between"><span className="text-amber-200/40">Props</span><span className="text-amber-100/80">{propsInRoom.length}</span></div>
+          <div className="flex justify-between"><span className="text-amber-200/40">Объекты</span><span className="text-amber-100/80">{propsInRoom.length}</span></div>
         </div>
         {/* difficulty bar */}
         <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-black/50">
@@ -1948,35 +1948,35 @@ function RoomInspector({ room, dungeon, onClose, onFocus }: {
                   color: ['#88ff88', '#ffcc44', '#ff5544', '#ff2222'][Number(tier)] ?? '#888',
                   background: (['#88ff88', '#ffcc44', '#ff5544', '#ff2222'][Number(tier)] ?? '#888') + '11',
                 }}>
-                  {['trash', 'normal', 'elite', 'boss'][Number(tier)]} ×{n}
+                  {['мусор', 'обычный', 'элита', 'boss'][Number(tier)]} ×{n}
                 </span>
               ))}
           </div>
         )}
-        {isEntrance && <p className="mt-2 text-[10px] text-blue-300/60">✦ Starting point — the adventurer's portal home.</p>}
-        {isBoss && <p className="mt-2 text-[10px] text-red-300/60">☠ Final encounter — the dungeon's darkest heart.</p>}
-        {room.type === 'treasure' && <p className="mt-2 text-[10px] text-amber-300/60">✧ Dead-end reward — a chest awaits.</p>}
-        {room.type === 'shrine' && <p className="mt-2 text-[10px] text-cyan-300/60">◈ Restorative shrine — crystal hums with power.</p>}
+        {isEntrance && <p className="mt-2 text-[10px] text-blue-300/60">✦ Начальная точка — портал домой.</p>}
+        {isBoss && <p className="mt-2 text-[10px] text-red-300/60">☠ Финальная битва — тёмное сердце подземелья.</p>}
+        {room.type === 'treasure' && <p className="mt-2 text-[10px] text-amber-300/60">✧ Награда в тупике — ждёт сундук.</p>}
+        {room.type === 'shrine' && <p className="mt-2 text-[10px] text-cyan-300/60">◈ Целительное святилище — кристалл гудит силой.</p>}
         <button
           onClick={onFocus}
           className="mt-3 flex w-full items-center justify-center gap-1.5 rounded-lg border border-amber-800/40 bg-amber-950/30 py-1.5 text-xs text-amber-200 transition-colors hover:bg-amber-900/40 hover:text-amber-100"
         >
-          <Crosshair className="h-3.5 w-3.5" /> Focus Camera
+          <Crosshair className="h-3.5 w-3.5" /> Фокус камеры
         </button>
       </div>
     </div>
   );
 }
 
-// ---- Difficulty meter (visual ramp from entrance→boss) ----
+// ---- Difficulty meter (visual ramp from entrance→босс) ----
 function DifficultyMeter({ dungeon }: { dungeon: Dungeon }) {
   const rooms = [...dungeon.rooms].sort((a, b) => a.depth - b.depth);
   const maxDepth = dungeon.stats.maxDepth || 1;
   return (
     <div className="space-y-1.5">
       <div className="flex items-center justify-between">
-        <Label className="text-xs uppercase tracking-wider text-amber-200/50">Difficulty Ramp</Label>
-        <span className="font-mono text-[10px] text-amber-300/50">{dungeon.stats.criticalLength} hops → boss</span>
+        <Label className="text-xs uppercase tracking-wider text-amber-200/50">Шкала сложности</Label>
+        <span className="font-mono text-[10px] text-amber-300/50">{dungeon.stats.criticalLength} шагов → босс</span>
       </div>
       <div className="flex h-5 overflow-hidden rounded-md border border-amber-900/30 bg-black/40">
         {rooms.map((r) => {
@@ -1985,7 +1985,7 @@ function DifficultyMeter({ dungeon }: { dungeon: Dungeon }) {
           const red = d < 0.5 ? Math.round(d * 2 * 255) : 255;
           const grn = d < 0.5 ? 255 : Math.round((1 - (d - 0.5) * 2) * 255);
           const title = `${r.type} · depth ${r.depth} · ${(d * 100).toFixed(0)}%`;
-          const isKey = r.type === 'entrance' || r.type === 'boss' || r.type === 'treasure' || r.type === 'shrine' || r.type === 'elite';
+          const isKey = r.type === 'entrance' || r.type === 'boss' || r.type === 'treasure' || r.type === 'shrine' || r.type === 'элита';
           return (
             <div
               key={r.id}
@@ -1997,8 +1997,8 @@ function DifficultyMeter({ dungeon }: { dungeon: Dungeon }) {
         })}
       </div>
       <div className="flex justify-between font-mono text-[9px] text-amber-300/40">
-        <span>entrance {(dungeon.rooms[dungeon.entranceId].difficulty * 100).toFixed(0)}%</span>
-        <span>boss {(dungeon.rooms[dungeon.bossId].difficulty * 100).toFixed(0)}%</span>
+        <span>вход {(dungeon.rooms[dungeon.entranceId]?.difficulty * 100).toFixed(0)}%</span>
+        <span>босс {(dungeon.rooms[dungeon.bossId]?.difficulty * 100).toFixed(0)}%</span>
       </div>
     </div>
   );
