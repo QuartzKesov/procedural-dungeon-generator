@@ -5,7 +5,7 @@ import * as THREE from 'three';
 import { generateDungeon } from '@/lib/dungeon/generator';
 import { buildDungeonScene, makeIsoCamera, fogDensityFor, type DungeonScene, type OverlayToggles } from '@/lib/dungeon/scene';
 import { runTestsOnDungeon, type TestResult } from '@/lib/dungeon/tests';
-import { DEFAULT_PARAMS, type Dungeon, type Params, type Theme, FLOOR, WALL } from '@/lib/dungeon/types';
+import { DEFAULT_PARAMS, type Dungeon, type Params, type Theme, FLOOR, WALL, VOID } from '@/lib/dungeon/types';
 import { roomFloorCells } from '@/lib/dungeon/generator';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -26,6 +26,11 @@ import {
 } from 'lucide-react';
 import { downloadExport } from '@/lib/dungeon/export';
 import type { WeatherType } from '@/lib/dungeon/types';
+import {
+  createEditorState, cloneDungeonForEdit, editGrid, stampRoom, addProp,
+  recomputeWalls, undoAction, redoAction, pushHistory, saveEditedDungeon,
+  type EditorState, type EditTool, type EditAction,
+} from '@/lib/dungeon/editor';
 
 interface ThreeState {
   renderer: THREE.WebGLRenderer;
@@ -81,10 +86,18 @@ export function DungeonViewer() {
   const [showCompare, setShowCompare] = useState(false);
   const [compareSeed, setCompareSeed] = useState<number>(0);
   const [showGallery, setShowGallery] = useState(false);
+  // ---- editor state ----
+  const [editorState, setEditorState] = useState<EditorState>(() => createEditorState());
+  const [editedDungeon, setEditedDungeon] = useState<Dungeon | null>(null);
+  const [editSaveName, setEditSaveName] = useState('');
+  const editorStateRef = useRef<EditorState>(editorState);
+  editorStateRef.current = editorState;
 
   // Generate the dungeon whenever params change. Fast (~25ms) → synchronous.
   const dungeon = useMemo<Dungeon>(() => generateDungeon(params), [params]);
   const testResults = useMemo<TestResult[]>(() => runTestsOnDungeon(dungeon), [dungeon]);
+  // When editor is enabled, work on a mutable copy; otherwise use the generated dungeon
+  const activeDungeon = editedDungeon ?? dungeon;
 
   // ---- sync params → URL hash (shareable seeds) ----
   useEffect(() => {
@@ -172,7 +185,93 @@ export function DungeonViewer() {
     return () => window.removeEventListener('dungeon-room-pick', onPick);
   }, []);
 
-  // ---- listen for room hover events (for tooltip) ----
+  // ---- listen for edit-click events from the canvas ----
+  useEffect(() => {
+    const onEditClick = (e: Event) => {
+      const { gridX, gridY } = (e as CustomEvent<{ gridX: number; gridY: number }>).detail;
+      const ed = editedDungeon ?? dungeon;
+      // ensure we have an edited copy
+      let work = editedDungeon;
+      if (!work) {
+        work = cloneDungeonForEdit(dungeon);
+        setEditedDungeon(work);
+      }
+      const st = editorStateRef.current;
+      const tool = st.tool;
+      let action: EditAction | null = null;
+      if (tool === 'floor') {
+        action = editGrid(work, gridX, gridY, FLOOR, st.brushSize);
+      } else if (tool === 'wall') {
+        action = editGrid(work, gridX, gridY, WALL, st.brushSize);
+      } else if (tool === 'erase') {
+        action = editGrid(work, gridX, gridY, VOID, st.brushSize);
+      } else if (tool === 'room_rect') {
+        action = stampRoom(work, gridX, gridY, st.roomSize, 'rectangle');
+      } else if (tool === 'room_ellipse') {
+        action = stampRoom(work, gridX, gridY, st.roomSize, 'ellipse');
+      } else if (tool === 'room_octagon') {
+        action = stampRoom(work, gridX, gridY, st.roomSize, 'octagon');
+      } else if (tool === 'torch') {
+        action = addProp(work, 'torch', gridX, gridY);
+      } else if (tool === 'chest') {
+        action = addProp(work, 'chest', gridX, gridY);
+      } else if (tool === 'pillar') {
+        action = addProp(work, 'pillar', gridX, gridY);
+      } else if (tool === 'crystal') {
+        action = addProp(work, 'crystal', gridX, gridY);
+      } else if (tool === 'trap') {
+        action = addProp(work, 'trap', gridX, gridY);
+      } else if (tool === 'teleport') {
+        action = addProp(work, 'teleport', gridX, gridY);
+      }
+      if (action) {
+        // for grid edits, recompute walls
+        if (action.type === 'grid') recomputeWalls(work);
+        pushHistory(st, action);
+        setEditorState({ ...st });
+        // trigger scene rebuild by creating a new reference
+        setEditedDungeon({ ...work });
+      }
+    };
+    window.addEventListener('dungeon-edit-click', onEditClick);
+    return () => window.removeEventListener('dungeon-edit-click', onEditClick);
+  }, [editedDungeon, dungeon]);
+
+  // ---- undo/redo handlers ----
+  const undo = useCallback(() => {
+    const st = editorStateRef.current;
+    if (st.historyIdx < 0 || !editedDungeon) return;
+    const action = st.history[st.historyIdx];
+    undoAction(editedDungeon, action);
+    recomputeWalls(editedDungeon);
+    st.historyIdx--;
+    setEditorState({ ...st });
+    setEditedDungeon({ ...editedDungeon });
+  }, [editedDungeon]);
+
+  const redo = useCallback(() => {
+    const st = editorStateRef.current;
+    if (st.historyIdx >= st.history.length - 1 || !editedDungeon) return;
+    st.historyIdx++;
+    const action = st.history[st.historyIdx];
+    redoAction(editedDungeon, action);
+    recomputeWalls(editedDungeon);
+    setEditorState({ ...st });
+    setEditedDungeon({ ...editedDungeon });
+  }, [editedDungeon]);
+
+  // ---- toggle editor on/off ----
+  const toggleEditor = useCallback(() => {
+    const st = editorStateRef.current;
+    if (!st.enabled) {
+      // entering edit mode: clone the dungeon
+      setEditedDungeon(cloneDungeonForEdit(dungeon));
+    } else {
+      // leaving edit mode: discard edits
+      setEditedDungeon(null);
+    }
+    setEditorState({ ...st, enabled: !st.enabled });
+  }, [dungeon]);
   useEffect(() => {
     const onHover = (e: Event) => {
       const { roomId, sx, sy } = (e as CustomEvent<{ roomId: number; sx: number; sy: number }>).detail;
@@ -290,13 +389,34 @@ export function DungeonViewer() {
     };
     const onUp = (e: PointerEvent) => {
       dragging = false;
-      // if pointer barely moved, treat as click → pick room
+      // if pointer barely moved, treat as click
       if (!moved && Math.abs(e.clientX - downX) < 5 && Math.abs(e.clientY - downY) < 5) {
         const ds = threeRef.current?.dungeonScene;
         if (!ds) return;
         const rect = renderer.domElement.getBoundingClientRect();
         const ndcX = ((e.clientX - rect.left) / rect.width) * 2 - 1;
         const ndcY = -((e.clientY - rect.top) / rect.height) * 2 + 1;
+        // In edit mode: dispatch edit-click with grid coords
+        if (editorStateRef.current?.enabled) {
+          // raycast to ground plane for grid coords
+          const hit2 = ds.pickRoom(ndcX, ndcY, camera);
+          if (hit2) {
+            window.dispatchEvent(new CustomEvent('dungeon-edit-click', { detail: { gridX: hit2.gridX, gridY: hit2.gridY } }));
+          } else {
+            // pickRoom returns null for non-floor cells; do a raw raycast
+            const raycaster2 = new THREE.Raycaster();
+            const groundPlane2 = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
+            const hit3 = new THREE.Vector3();
+            raycaster2.setFromCamera(new THREE.Vector2(ndcX, ndcY), camera);
+            if (raycaster2.ray.intersectPlane(groundPlane2, hit3)) {
+              const gx = Math.round(hit3.x + (currentDungeon.W - 1) / 2);
+              const gy = Math.round(hit3.z + (currentDungeon.H - 1) / 2);
+              window.dispatchEvent(new CustomEvent('dungeon-edit-click', { detail: { gridX: gx, gridY: gy } }));
+            }
+          }
+          return; // don't do room picking in edit mode
+        }
+        // Normal mode: pick room
         const hit = ds.pickRoom(ndcX, ndcY, camera);
         if (hit && hit.roomId >= 0) {
           (threeRef.current as any)?.onRoomPicked?.(hit.roomId);
@@ -419,7 +539,7 @@ export function DungeonViewer() {
     };
   }, []);
 
-  // ---- rebuild scene when dungeon changes ----
+  // ---- rebuild scene when activeDungeon changes ----
   useEffect(() => {
     const state = threeRef.current;
     if (!state) return;
@@ -428,28 +548,28 @@ export function DungeonViewer() {
       state.scene.remove(state.dungeonScene.group);
       state.dungeonScene.dispose();
     }
-    const ds = buildDungeonScene(dungeon, {
+    const ds = buildDungeonScene(activeDungeon, {
       animateBuild, buildProgress: animateBuild ? 0 : 1, overlays,
     });
     state.scene.add(ds.group);
     state.dungeonScene = ds;
     // reset camera pan/zoom to fit + refresh fog density for the new scale
     state.zoom = 1; state.pan.set(0, 0);
-    (state as any).setCurrentDungeon?.(dungeon);
+    (state as any).setCurrentDungeon?.(activeDungeon);
     if (state.scene.fog instanceof THREE.FogExp2) {
-      state.scene.fog.density = fogDensityFor(dungeon);
+      state.scene.fog.density = fogDensityFor(activeDungeon);
     }
     const container = containerRef.current!;
     const aspect = container.clientWidth / container.clientHeight;
-    const cam = makeIsoCamera(dungeon, aspect);
+    const cam = makeIsoCamera(activeDungeon, aspect);
     state.camera.left = cam.left; state.camera.right = cam.right;
     state.camera.top = cam.top; state.camera.bottom = cam.bottom;
     state.camera.near = cam.near; state.camera.far = cam.far;
     state.camera.position.copy(cam.position);
     state.camera.lookAt(0, 0, 0);
     state.camera.updateProjectionMatrix();
-    // start build animation
-    if (animateBuild) {
+    // start build animation (skip when editing — instant rebuild)
+    if (animateBuild && !editorState.enabled) {
       buildAnimRef.current = { active: true, progress: 0 };
       ds.setBuildProgress(0);
     } else {
@@ -457,7 +577,7 @@ export function DungeonViewer() {
       ds.setBuildProgress(1);
     }
     ds.setOverlays(overlays);
-  }, [dungeon]);
+  }, [activeDungeon, animateBuild]);
 
   // ---- overlay toggle ----
   useEffect(() => {
@@ -484,7 +604,7 @@ export function DungeonViewer() {
     if (!canvas) return;
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
-    const d = dungeon;
+    const d = activeDungeon;
     const W = canvas.width, H = canvas.height;
     ctx.fillStyle = '#05040a';
     ctx.fillRect(0, 0, W, H);
@@ -579,7 +699,7 @@ export function DungeonViewer() {
     if (!canvas || !state) return;
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
-    const d = dungeon;
+    const d = activeDungeon;
     const W = canvas.width, H = canvas.height;
     const sx = W / d.W, sy = H / d.H;
     // restore base image
@@ -652,18 +772,18 @@ export function DungeonViewer() {
     const rect = canvas.getBoundingClientRect();
     const fx = (e.clientX - rect.left) / rect.width;   // 0..1
     const fy = (e.clientY - rect.top) / rect.height;   // 0..1
-    const gridX = Math.round(fx * dungeon.W);
-    const gridY = Math.round(fy * dungeon.H);
+    const gridX = Math.round(fx * activeDungeon.W);
+    const gridY = Math.round(fy * activeDungeon.H);
     focusOnCellRef.current?.(gridX, gridY);
   }, [dungeon]);
 
   // ---- quick-nav: focus entrance / boss ----
   const focusEntrance = useCallback(() => {
-    const r = dungeon.rooms[dungeon.entranceId];
+    const r = activeDungeon.rooms[activeDungeon.entranceId];
     focusOnCellRef.current?.(r.cx, r.cy);
   }, [dungeon]);
   const focusBoss = useCallback(() => {
-    const r = dungeon.rooms[dungeon.bossId];
+    const r = activeDungeon.rooms[activeDungeon.bossId];
     focusOnCellRef.current?.(r.cx, r.cy);
   }, [dungeon]);
 
@@ -707,7 +827,7 @@ export function DungeonViewer() {
     const dataUrl = state.renderer.domElement.toDataURL('image/png');
     const a = document.createElement('a');
     a.href = dataUrl;
-    a.download = `dungeon-${dungeon.params.seed}-${dungeon.params.theme}.png`;
+    a.download = `dungeon-${activeDungeon.params.seed}-${activeDungeon.params.theme}.png`;
     a.click();
   }, [dungeon]);
 
@@ -755,12 +875,12 @@ export function DungeonViewer() {
     return () => window.removeEventListener('keydown', onKey);
   }, [rollDice, regenerate, replayBuild, focusEntrance, focusBoss, toggleAudio, rotateCamera]);
 
-  const stats = dungeon.stats;
+  const stats = activeDungeon.stats;
   const typeCounts = useMemo(() => {
     const m: Record<string, number> = {};
-    for (const r of dungeon.rooms) m[r.type] = (m[r.type] ?? 0) + 1;
+    for (const r of activeDungeon.rooms) m[r.type] = (m[r.type] ?? 0) + 1;
     return m;
-  }, [dungeon]);
+  }, [activeDungeon]);
 
   const allTestsPass = testResults.every((t) => t.pass) && (perfResult?.pass ?? false);
 
@@ -773,9 +893,9 @@ export function DungeonViewer() {
       <header className="pointer-events-none absolute inset-x-0 top-0 z-20 flex justify-center px-4 pt-3">
         <div className="pointer-events-auto flex max-w-[calc(100vw-2rem)] items-center gap-2 rounded-full border border-amber-900/40 bg-black/70 px-4 py-1.5 backdrop-blur-md sm:gap-3 sm:px-5 sm:py-2">
           <span className="animate-pulse text-base text-amber-500 sm:text-lg">⚜</span>
-          <h1 className="truncate font-serif text-xs tracking-wide text-amber-100/90 sm:text-sm md:text-base">{dungeon.name}</h1>
+          <h1 className="truncate font-serif text-xs tracking-wide text-amber-100/90 sm:text-sm md:text-base">{activeDungeon.name}</h1>
           <Badge variant="outline" className="hidden border-amber-800/50 bg-amber-950/30 text-[10px] font-mono text-amber-300/70 sm:inline-flex">
-            seed {dungeon.params.seed}
+            seed {activeDungeon.params.seed}
           </Badge>
           <div className="mx-1 hidden h-5 w-px bg-amber-900/40 sm:block" />
           <button
@@ -1050,6 +1170,95 @@ export function DungeonViewer() {
 
               <Separator className="bg-amber-900/30" />
 
+              {/* ---- Level Editor ---- */}
+              <PanelTitle icon={<Layers className="h-4 w-4 text-amber-500" />} title="Level Editor" />
+              <div className="flex items-center justify-between rounded-lg border border-amber-900/30 bg-amber-950/10 px-3 py-1.5">
+                <Label className="text-xs text-amber-100/80">Edit Mode</Label>
+                <Switch checked={editorState.enabled} onCheckedChange={toggleEditor} />
+              </div>
+              {editorState.enabled && (
+                <div className="space-y-3 rounded-lg border border-amber-900/30 bg-black/40 p-3">
+                  {/* Tool selection grid */}
+                  <div>
+                    <Label className="mb-1.5 block text-[10px] uppercase tracking-wider text-amber-200/50">Tools</Label>
+                    <div className="grid grid-cols-4 gap-1">
+                      {([
+                        { t: 'floor', l: 'Floor', c: '#6a6258' },
+                        { t: 'wall', l: 'Wall', c: '#2a2620' },
+                        { t: 'erase', l: 'Erase', c: '#05040a' },
+                        { t: 'select', l: 'Select', c: '#ffffff' },
+                        { t: 'room_rect', l: 'Room ▭', c: '#8a5a2a' },
+                        { t: 'room_ellipse', l: 'Room ○', c: '#8a5a2a' },
+                        { t: 'room_octagon', l: 'Room ⬡', c: '#8a5a2a' },
+                        { t: 'torch', l: 'Torch', c: '#ffb24a' },
+                        { t: 'chest', l: 'Chest', c: '#8a5a2a' },
+                        { t: 'pillar', l: 'Pillar', c: '#6b6258' },
+                        { t: 'crystal', l: 'Crystal', c: '#6ad0ff' },
+                        { t: 'trap', l: 'Trap', c: '#8a3a3a' },
+                        { t: 'teleport', l: 'Teleport', c: '#dd44ff' },
+                      ] as Array<{ t: EditTool; l: string; c: string }>).map((tool) => (
+                        <button
+                          key={tool.t}
+                          onClick={() => setEditorState((s) => ({ ...s, tool: tool.t }))}
+                          title={tool.l}
+                          className={`flex flex-col items-center gap-0.5 rounded border px-1 py-1.5 text-[8px] transition-colors ${
+                            editorState.tool === tool.t
+                              ? 'border-amber-500/60 bg-amber-800/40 text-amber-100'
+                              : 'border-amber-900/20 bg-amber-950/10 text-amber-300/50 hover:bg-amber-900/20'
+                          }`}
+                        >
+                          <span className="inline-block h-2.5 w-2.5 rounded-sm" style={{ background: tool.c }} />
+                          {tool.l}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                  {/* Brush size (for floor/wall/erase) */}
+                  {(editorState.tool === 'floor' || editorState.tool === 'wall' || editorState.tool === 'erase') && (
+                    <SliderRow label="Brush Size" value={editorState.brushSize} min={1} max={5} step={1}
+                      display={`${editorState.brushSize}`} onChange={(v) => setEditorState((s) => ({ ...s, brushSize: v }))} />
+                  )}
+                  {/* Room size (for room stamping) */}
+                  {(editorState.tool === 'room_rect' || editorState.tool === 'room_ellipse' || editorState.tool === 'room_octagon') && (
+                    <SliderRow label="Room Size" value={editorState.roomSize} min={3} max={15} step={1}
+                      display={`${editorState.roomSize}`} onChange={(v) => setEditorState((s) => ({ ...s, roomSize: v }))} />
+                  )}
+                  {/* Undo/Redo */}
+                  <div className="flex gap-2">
+                    <Button size="sm" variant="outline" onClick={undo} disabled={editorState.historyIdx < 0}
+                      className="flex-1 border-amber-800/40 bg-amber-950/20 text-xs text-amber-300 hover:bg-amber-900/30 disabled:opacity-30">
+                      <RefreshCw className="mr-1 h-3 w-3 -scale-x-100" /> Undo
+                    </Button>
+                    <Button size="sm" variant="outline" onClick={redo} disabled={editorState.historyIdx >= editorState.history.length - 1}
+                      className="flex-1 border-amber-800/40 bg-amber-950/20 text-xs text-amber-300 hover:bg-amber-900/30 disabled:opacity-30">
+                      <RefreshCw className="mr-1 h-3 w-3" /> Redo
+                    </Button>
+                  </div>
+                  {/* Save layout */}
+                  <div className="flex gap-1.5">
+                    <Input
+                      value={editSaveName}
+                      onChange={(e) => setEditSaveName(e.target.value)}
+                      placeholder="Layout name…"
+                      className="h-7 border-amber-900/40 bg-amber-950/20 text-xs text-amber-100"
+                    />
+                    <Button size="sm" onClick={() => {
+                      if (editedDungeon && editSaveName.trim()) {
+                        saveEditedDungeon(editedDungeon, editSaveName.trim());
+                      }
+                    }}
+                      className="h-7 shrink-0 border-amber-700/50 bg-amber-800/40 px-2 text-xs text-amber-50 hover:bg-amber-700/50">
+                      <Save className="h-3 w-3" />
+                    </Button>
+                  </div>
+                  <p className="text-center text-[9px] text-amber-300/30">
+                    Click on the 3D view to place/edit
+                  </p>
+                </div>
+              )}
+
+              <Separator className="bg-amber-900/30" />
+
               <PanelTitle icon={<Eye className="h-4 w-4 text-amber-500" />} title="Debug Overlays" />
               <div className="space-y-2">
                 <ToggleRow label="Critical Path" color="#ff3030" checked={overlays.critical} onCheckedChange={(v) => setOverlays((o) => ({ ...o, critical: v }))} />
@@ -1084,7 +1293,7 @@ export function DungeonViewer() {
                     state.zoom = Math.max(0.4, Math.min(3.5, state.zoom * factor));
                     const container = containerRef.current!;
                     const aspect = container.clientWidth / container.clientHeight;
-                    const half = (dungeon.W + dungeon.H) * 0.42 / state.zoom;
+                    const half = (activeDungeon.W + activeDungeon.H) * 0.42 / state.zoom;
                     state.camera.left = -half * aspect; state.camera.right = half * aspect;
                     state.camera.top = half; state.camera.bottom = -half;
                     state.camera.updateProjectionMatrix();
@@ -1112,7 +1321,7 @@ export function DungeonViewer() {
 
               <PanelTitle icon={<Zap className="h-4 w-4 text-amber-500" />} title="Stats" />
               <div className="grid grid-cols-2 gap-x-3 gap-y-1.5 font-mono text-xs">
-                <Stat k="Grid" v={`${dungeon.W}×${dungeon.H}`} />
+                <Stat k="Grid" v={`${activeDungeon.W}×${activeDungeon.H}`} />
                 <AnimatedStat k="Rooms" v={stats.rooms} />
                 <AnimatedStat k="Edges" v={stats.edges} />
                 <AnimatedStat k="Loops" v={stats.loops} highlight />
@@ -1132,7 +1341,7 @@ export function DungeonViewer() {
               <div>
                 <Label className="mb-1.5 block text-xs uppercase tracking-wider text-amber-200/50">Room Shapes</Label>
                 <div className="flex flex-wrap gap-1">
-                  {Object.entries(dungeon.rooms.reduce((m, r) => { m[r.shape] = (m[r.shape] ?? 0) + 1; return m; }, {} as Record<string, number>)).sort().map(([s, n]) => (
+                  {Object.entries(activeDungeon.rooms.reduce((m, r) => { m[r.shape] = (m[r.shape] ?? 0) + 1; return m; }, {} as Record<string, number>)).sort().map(([s, n]) => (
                     <span key={s} className="rounded border border-amber-900/30 bg-amber-950/20 px-1.5 py-0.5 text-[9px] text-amber-200/60">
                       {s} <span className="text-amber-300/80">{n}</span>
                     </span>
@@ -1145,7 +1354,7 @@ export function DungeonViewer() {
                 <div className="space-y-1">
                   {Object.entries(typeCounts).sort().map(([t, n]) => {
                     const color = ROOM_TYPE_COLOR[t] ?? '#666';
-                    const pct = (n / dungeon.rooms.length) * 100;
+                    const pct = (n / activeDungeon.rooms.length) * 100;
                     return (
                       <div key={t} className="flex items-center gap-2">
                         <span className="w-16 shrink-0 text-[10px] capitalize text-amber-100/70">{t}</span>
@@ -1159,7 +1368,7 @@ export function DungeonViewer() {
                 </div>
               </div>
 
-              <DifficultyMeter dungeon={dungeon} />
+              <DifficultyMeter dungeon={activeDungeon} />
 
               <Separator className="bg-amber-900/30" />
 
@@ -1170,7 +1379,7 @@ export function DungeonViewer() {
                   className="flex w-full items-center justify-between rounded-lg border border-amber-900/30 bg-amber-950/10 px-3 py-1.5 text-xs text-amber-200/70 transition-colors hover:bg-amber-900/20"
                 >
                   <span className="flex items-center gap-1.5"><List className="h-3.5 w-3.5" /> Room List</span>
-                  <span className="font-mono text-[10px] text-amber-300/50">{dungeon.rooms.length} rooms</span>
+                  <span className="font-mono text-[10px] text-amber-300/50">{activeDungeon.rooms.length} rooms</span>
                 </button>
                 {showRoomList && (
                   <div className="space-y-2 rounded-lg border border-amber-900/30 bg-black/40 p-2">
@@ -1188,7 +1397,7 @@ export function DungeonViewer() {
                     </div>
                     {/* room list — scrollable */}
                     <div className="max-h-48 space-y-0.5 overflow-y-auto">
-                      {dungeon.rooms
+                      {activeDungeon.rooms
                         .filter((r) => roomListFilter === 'all' || r.type === roomListFilter)
                         .sort((a, b) => a.depth - b.depth)
                         .map((r) => {
@@ -1286,22 +1495,22 @@ export function DungeonViewer() {
       )}
 
       {/* Room inspector — floating card when a room is selected */}
-      {selectedRoom >= 0 && selectedRoom < dungeon.rooms.length && (
+      {selectedRoom >= 0 && selectedRoom < activeDungeon.rooms.length && (
         <RoomInspector
-          room={dungeon.rooms[selectedRoom]}
-          dungeon={dungeon}
+          room={activeDungeon.rooms[selectedRoom]}
+          dungeon={activeDungeon}
           onClose={() => setSelectedRoom(-1)}
           onFocus={() => {
-            const r = dungeon.rooms[selectedRoom];
+            const r = activeDungeon.rooms[selectedRoom];
             focusOnCellRef.current?.(r.cx, r.cy);
           }}
         />
       )}
 
       {/* Room hover tooltip — lightweight preview following the cursor */}
-      {hoveredRoom >= 0 && hoveredRoom !== selectedRoom && hoveredRoom < dungeon.rooms.length && hoveredScreen && (
+      {hoveredRoom >= 0 && hoveredRoom !== selectedRoom && hoveredRoom < activeDungeon.rooms.length && hoveredScreen && (
         <RoomHoverTooltip
-          room={dungeon.rooms[hoveredRoom]}
+          room={activeDungeon.rooms[hoveredRoom]}
           x={hoveredScreen.x}
           y={hoveredScreen.y}
         />
@@ -1310,7 +1519,7 @@ export function DungeonViewer() {
       {/* ---- Compare overlay ---- */}
       {showCompare && (
         <CompareOverlay
-          dungeonA={dungeon}
+          dungeonA={activeDungeon}
           seedB={compareSeed}
           params={params}
           onClose={() => setShowCompare(false)}
@@ -1332,7 +1541,7 @@ export function DungeonViewer() {
         <div className="mx-auto flex max-w-7xl flex-wrap items-center justify-between gap-2 text-[11px] text-amber-200/50">
           <span className="font-serif tracking-wide">Procedural Dungeon Generator · Isometric Three.js ARPG</span>
           <span className="font-mono">
-            {dungeon.rooms.length} rooms · {stats.loops} loops · {stats.floorTiles} floor tiles · {stats.genMs.toFixed(1)} ms
+            {activeDungeon.rooms.length} rooms · {stats.loops} loops · {stats.floorTiles} floor tiles · {stats.genMs.toFixed(1)} ms
           </span>
         </div>
       </footer>
@@ -1502,7 +1711,7 @@ function MinimapThumb({ dungeon }: { dungeon: Dungeon }) {
     if (!canvas) return;
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
-    const d = dungeon;
+    const d = activeDungeon;
     const W = canvas.width, H = canvas.height;
     ctx.fillStyle = '#05040a';
     ctx.fillRect(0, 0, W, H);
@@ -1695,8 +1904,8 @@ function RoomInspector({ room, dungeon, onClose, onFocus }: {
   onFocus: () => void;
 }) {
   const typeColor = ROOM_TYPE_COLOR[room.type] ?? '#9a8a78';
-  const spawnsInRoom = dungeon.spawns.filter((s) => s.roomId === room.id);
-  const propsInRoom = dungeon.props.filter((p) => p.roomId === room.id);
+  const spawnsInRoom = activeDungeon.spawns.filter((s) => s.roomId === room.id);
+  const propsInRoom = activeDungeon.props.filter((p) => p.roomId === room.id);
   const isBoss = room.type === 'boss';
   const isEntrance = room.type === 'entrance';
   return (
