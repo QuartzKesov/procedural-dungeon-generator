@@ -429,3 +429,22 @@ Stage Summary:
 - Chest: proper top-down rectangle with iron bands + lock (top-down PNG/dd2vtt + 3D domed lid)
 - Removed all green/yellow spawn dots from battlemap export
 - All tests pass, lint clean
+
+---
+Task ID: fix-pan-remove-uvtt-overlays-png
+Agent: main
+Task: Fix pan direction (up=left bug), remove Foundry UVTT export, add Debug Overlay descriptions + make lines visible, fix PNG export grid alignment
+
+Work Log:
+- FIXED pan direction: old code used broken trig formula `pan.x -= (dx*cosY - dy*cosY)` that mixed axes incorrectly. Replaced with camera.matrix.extractBasis() to get actual right/up vectors in world space, then `pan += -right*dx + up*dy`. Now dragging right moves content right, dragging up moves content up — correct at every yaw/pitch.
+- REMOVED Foundry VTT export entirely: deleted .dd2vtt button, downloadUVTT(), extractWallSegments(), extractPortals(), extractLights(), UVTTFile/UVTTPortal/UVTTLight/UVTTResolution interfaces. Kept only PNG export (two buttons: "PNG с метками" and "PNG чистый").
+- ADDED Debug Overlay descriptions: each toggle now has a Russian explanation below it (red lines = critical path, cyan = loops, white = MST, blue = Delaunay, heatmap = difficulty, yellow = patrols). Renamed section "Debug Overlays" → "Отладочные слои" with intro text.
+- MADE overlay lines visible: raised from y=0.06 (hidden behind walls) to y=3.0 (above 2.2-tall walls). Set depthTest:false + renderOrder:999 so lines render on top. Increased opacities: critical 0.95→1.0, loops 0.85→1.0, MST 0.55→0.9, Delaunay 0.18→0.7. Added sphere node markers at room centers for each active overlay. Verified: 1765 red pixels render with critical path enabled.
+- FIXED PNG export grid alignment: increased MAX_IMAGE_DIM from 4096→8192 (Foundry no longer needs small images). For 128-wide grid: ppg = floor(8192/128) = 64px/cell (was 32). Min ppg raised from 16→32. Image stays perfectly grid-aligned (integer ppg).
+- Verified: 5/5 acceptance tests pass, lint clean, pan direction correct (VLM confirmed), overlays visible (1765 red pixels), no Foundry references remain.
+
+Stage Summary:
+- Pan: grab-drag now works correctly in all directions at all camera angles
+- Foundry UVTT export: fully removed, only PNG export remains
+- Debug Overlays: Russian descriptions added, lines raised above walls with full opacity + node markers
+- PNG export: grid-aligned at 64px/cell (8192px max dimension), good quality

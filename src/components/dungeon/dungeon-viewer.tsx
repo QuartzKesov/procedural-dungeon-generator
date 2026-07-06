@@ -25,7 +25,7 @@ import {
   ArrowDown, ArrowUp, CloudRain, Snowflake, Flame, FileJson, Columns2, Images,
 } from 'lucide-react';
 import { downloadExport } from '@/lib/dungeon/export';
-import { downloadUVTT, downloadTopDownPNG, downloadTopDownPNGClean } from '@/lib/dungeon/uvtt';
+import { downloadTopDownPNG, downloadTopDownPNGClean } from '@/lib/dungeon/uvtt';
 import type { WeatherType } from '@/lib/dungeon/types';
 import {
   createEditorState, cloneDungeonForEdit, editGrid, stampRoom, addProp, addDoor,
@@ -431,14 +431,17 @@ export function DungeonViewer() {
         const dx = e.clientX - lastX, dy = e.clientY - lastY;
         if (Math.abs(e.clientX - downX) > 5 || Math.abs(e.clientY - downY) > 5) moved = true;
         lastX = e.clientX; lastY = e.clientY;
-        // pan in world units: screen delta → world delta via ortho frustum.
-        // Direction follows the camera yaw so panning feels natural after rotation.
+        // Grab-drag panning: content follows the mouse. Use the camera's actual
+        // right/up vectors (in world space) so panning feels correct at every yaw
+        // and pitch — no manual trig that breaks at non-default rotations.
         const worldPerPx = (camera.top - camera.bottom) / container.clientHeight;
-        const yaw = THREE.MathUtils.degToRad((state as any).cameraYaw ?? 45);
-        const cosY = Math.cos(yaw), sinY = Math.sin(yaw);
-        // screen-x → world (cos, sin); screen-y → (-sin, cos) (perpendicular, tilted by iso)
-        state.pan.x -= (dx * cosY - dy * cosY) * worldPerPx;
-        state.pan.y -= (dx * sinY + dy * sinY) * worldPerPx;
+        const camRight = new THREE.Vector3();
+        const camUp = new THREE.Vector3();
+        camera.matrix.extractBasis(camRight, camUp, new THREE.Vector3());
+        // dx>0 (drag right) → world moves right → camera moves left (−right)
+        // dy>0 (drag down)  → world moves down  → camera moves up   (+up)
+        state.pan.x += (-camRight.x * dx + camUp.x * dy) * worldPerPx;
+        state.pan.y += (-camRight.z * dx + camUp.z * dy) * worldPerPx;
         applyCamera();
       } else {
         // hover detection — raycast to find which room is under the cursor
@@ -1126,30 +1129,23 @@ export function DungeonViewer() {
                 </Button>
               </div>
 
-              {/* ---- Foundry VTT export ---- */}
-              <div className="rounded-lg border border-emerald-900/30 bg-emerald-950/10 p-2">
-                <div className="mb-1.5 text-[9px] uppercase tracking-wider text-emerald-400/50">Foundry VTT</div>
-                <div className="grid grid-cols-1 gap-1.5">
-                  <Button size="sm" variant="outline" onClick={() => downloadUVTT(activeDungeon)}
-                    className="border-emerald-800/40 bg-emerald-950/20 text-xs text-emerald-300 hover:bg-emerald-900/30"
-                    title="Экспорт .dd2vtt для dd-import (карта + стены + двери + свет)">
-                    <Download className="mr-1 h-3.5 w-3.5" /> .dd2vtt (карта + стены + двери + свет)
+              {/* ---- Image export ---- */}
+              <div className="rounded-lg border border-amber-900/30 bg-amber-950/10 p-2">
+                <div className="mb-1.5 text-[9px] uppercase tracking-wider text-amber-400/50">Экспорт картинок</div>
+                <div className="grid grid-cols-2 gap-1.5">
+                  <Button size="sm" variant="outline" onClick={() => downloadTopDownPNG(activeDungeon)}
+                    className="border-amber-800/40 bg-amber-950/20 text-xs text-amber-300 hover:bg-amber-900/30"
+                    title="Top-down PNG с метками комнат">
+                    <Download className="mr-1 h-3 w-3" /> PNG с метками
                   </Button>
-                  <div className="grid grid-cols-2 gap-1.5">
-                    <Button size="sm" variant="outline" onClick={() => downloadTopDownPNGClean(activeDungeon)}
-                      className="border-emerald-800/40 bg-emerald-950/20 text-xs text-emerald-300 hover:bg-emerald-900/30"
-                      title="Top-down PNG без меток, с декором (для Foundry)">
-                      <Download className="mr-1 h-3 w-3" /> PNG чистый
-                    </Button>
-                    <Button size="sm" variant="outline" onClick={() => downloadTopDownPNG(activeDungeon)}
-                      className="border-emerald-800/40 bg-emerald-950/20 text-xs text-emerald-300 hover:bg-emerald-900/30"
-                      title="Top-down PNG с метками комнат">
-                      <Download className="mr-1 h-3 w-3" /> PNG метки
-                    </Button>
-                  </div>
+                  <Button size="sm" variant="outline" onClick={() => downloadTopDownPNGClean(activeDungeon)}
+                    className="border-amber-800/40 bg-amber-950/20 text-xs text-amber-300 hover:bg-amber-900/30"
+                    title="Top-down PNG без меток, чистая карта подземелья">
+                    <Download className="mr-1 h-3 w-3" /> PNG чистый
+                  </Button>
                 </div>
-                <p className="mt-1.5 text-[8px] leading-relaxed text-emerald-400/30">
-                  .dd2vtt — импорт в Foundry через dd-import. PNG чистый — для ручного импорта (без меток, с декором).
+                <p className="mt-1.5 text-[8px] leading-relaxed text-amber-400/30">
+                  Карта в виде PNG. «С метками» — со значками комнат (Вход, Босс, Сокровище). «Чистый» — только пол, стены и декор.
                 </p>
               </div>
 
@@ -1306,14 +1302,23 @@ export function DungeonViewer() {
 
               <Separator className="bg-amber-900/30" />
 
-              <PanelTitle icon={<Eye className="h-4 w-4 text-amber-500" />} title="Debug Overlays" />
+              <PanelTitle icon={<Eye className="h-4 w-4 text-amber-500" />} title="Отладочные слои" />
+              <p className="text-[8px] leading-relaxed text-amber-400/40">
+                Визуальные схемы поверх 3D-сцены для анализа структуры подземелья. Линии рисуются между центрами комнат.
+              </p>
               <div className="space-y-2">
                 <ToggleRow label="Критический путь" color="#ff3030" checked={overlays.critical} onCheckedChange={(v) => setOverlays((o) => ({ ...o, critical: v }))} />
-                <ToggleRow label="Циклы" color="#33e0ff" checked={overlays.loops} onCheckedChange={(v) => setOverlays((o) => ({ ...o, loops: v }))} />
-                <ToggleRow label="MST (Скелет)" color="#ffffff" checked={overlays.mst} onCheckedChange={(v) => setOverlays((o) => ({ ...o, mst: v }))} />
-                <ToggleRow label="Делоне (близость)" color="#88aaff" checked={overlays.delaunay} onCheckedChange={(v) => setOverlays((o) => ({ ...o, delaunay: v }))} />
-                <ToggleRow label="Тепловая карта сложности" color="#ffaa00" checked={overlays.difficulty} onCheckedChange={(v) => setOverlays((o) => ({ ...o, difficulty: v }))} />
+                <p className="pl-5 text-[8px] leading-tight text-amber-400/30">Красные линии — кратчайший маршрут от Входа до Босса.</p>
+                <ToggleRow label="Циклы (обходы)" color="#33e0ff" checked={overlays.loops} onCheckedChange={(v) => setOverlays((o) => ({ ...o, loops: v }))} />
+                <p className="pl-5 text-[8px] leading-tight text-amber-400/30">Голубые линии — альтернативные пути между комнатами (не на критическом пути).</p>
+                <ToggleRow label="MST (каркас)" color="#ffffff" checked={overlays.mst} onCheckedChange={(v) => setOverlays((o) => ({ ...o, mst: v }))} />
+                <p className="pl-5 text-[8px] leading-tight text-amber-400/30">Белые линии — минимальное остовное дерево: базовые связи всех комнат.</p>
+                <ToggleRow label="Триангуляция Делоне" color="#88aaff" checked={overlays.delaunay} onCheckedChange={(v) => setOverlays((o) => ({ ...o, delaunay: v }))} />
+                <p className="pl-5 text-[8px] leading-tight text-amber-400/30">Синие линии — все возможные связи между ближайшими комнатами до отсечения.</p>
+                <ToggleRow label="Тепловая карта" color="#ffaa00" checked={overlays.difficulty} onCheckedChange={(v) => setOverlays((o) => ({ ...o, difficulty: v }))} />
+                <p className="pl-5 text-[8px] leading-tight text-amber-400/30">Цвет ячеек = сложность: зелёный (легко) → жёлтый → красный (опасно).</p>
                 <ToggleRow label="Маршруты патрулей" color="#ffcc44" checked={overlays.patrols} onCheckedChange={(v) => setOverlays((o) => ({ ...o, patrols: v }))} />
+                <p className="pl-5 text-[8px] leading-tight text-amber-400/30">Жёлтые треугольники — пути врагов между точками спавна.</p>
               </div>
             </div>
           </ScrollArea>

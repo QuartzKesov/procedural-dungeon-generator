@@ -1091,40 +1091,57 @@ export function buildDungeonScene(d: Dungeon, opts: BuildOptions): DungeonScene 
       const m = (c as THREE.LineSegments).material;
       if (Array.isArray(m)) m.forEach((mm) => mm.dispose()); else (m as THREE.Material)?.dispose?.();
     }
-    // Graph edges live in grid space; convert to world line segments slightly above floor.
-    const centers = d.rooms.map((r) => new THREE.Vector3(worldX(r.cx), 0.06, worldZ(r.cy)));
+    // Graph edges live in grid space; convert to world line segments raised
+    // ABOVE the walls (y=3.0, walls are ~2.2) so they're always visible.
+    const centers = d.rooms.map((r) => new THREE.Vector3(worldX(r.cx), 3.0, worldZ(r.cy)));
     const makeLine = (pts: number[], color: number, opacity: number) => {
+      if (pts.length === 0) return;
       const g = new THREE.BufferGeometry();
       g.setAttribute('position', new THREE.Float32BufferAttribute(pts, 3));
-      const m = new THREE.LineBasicMaterial({ color, transparent: true, opacity });
+      const m = new THREE.LineBasicMaterial({ color, transparent: true, opacity, depthTest: false });
       const ls = new THREE.LineSegments(g, m);
+      ls.renderOrder = 999;
       overlayGroup.add(ls);
+    };
+    // Draw node markers (small spheres) at room centers for the active graph overlays
+    const makeNodes = (color: number, opacity: number) => {
+      const nodeGeo = new THREE.SphereGeometry(0.25, 8, 6);
+      const nodeMat = new THREE.MeshBasicMaterial({ color, transparent: true, opacity, depthTest: false });
+      const nodes = new THREE.InstancedMesh(nodeGeo, nodeMat, d.rooms.length);
+      for (let i = 0; i < d.rooms.length; i++) {
+        _m.makeTranslation(centers[i].x, centers[i].y, centers[i].z);
+        nodes.setMatrixAt(i, _m);
+      }
+      nodes.renderOrder = 1000;
+      overlayGroup.add(nodes);
     };
     if (toggles.critical) {
       const pts: number[] = [];
       for (const e of d.edges) if (e.isCritical) { pts.push(...centers[e.a].toArray(), ...centers[e.b].toArray()); }
-      makeLine(pts, 0xff3030, 0.95);
+      makeLine(pts, 0xff3030, 1.0);
+      makeNodes(0xff3030, 1.0);
     }
     if (toggles.loops) {
       const pts: number[] = [];
       for (const e of d.edges) if (e.isLoop) { pts.push(...centers[e.a].toArray(), ...centers[e.b].toArray()); }
-      makeLine(pts, 0x33e0ff, 0.85);
+      makeLine(pts, 0x33e0ff, 1.0);
+      makeNodes(0x33e0ff, 0.9);
     }
     if (toggles.mst) {
       const pts: number[] = [];
       for (const e of d.edges) if (!e.isLoop) { pts.push(...centers[e.a].toArray(), ...centers[e.b].toArray()); }
-      makeLine(pts, 0xffffff, 0.55);
+      makeLine(pts, 0xffffff, 0.9);
+      makeNodes(0xffffff, 0.8);
     }
     if (toggles.delaunay) {
-      // Rebuild Delaunay would require the geometry import; instead show all
-      // edges faintly as a proxy by drawing room-center proximity graph.
       const pts: number[] = [];
       for (let a = 0; a < d.rooms.length; a++)
         for (let b = a + 1; b < d.rooms.length; b++) {
           const dx = d.rooms[a].cx - d.rooms[b].cx, dy = d.rooms[a].cy - d.rooms[b].cy;
           if (Math.sqrt(dx * dx + dy * dy) < 22) pts.push(...centers[a].toArray(), ...centers[b].toArray());
         }
-      makeLine(pts, 0x88aaff, 0.18);
+      makeLine(pts, 0x88aaff, 0.7);
+      makeNodes(0x88aaff, 0.7);
     }
     if (toggles.difficulty) {
       // recolor floor by difficulty: tint each floor instance toward red by difficulty.

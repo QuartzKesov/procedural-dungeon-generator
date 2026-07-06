@@ -1,71 +1,25 @@
-// uvtt.ts — Universal VTT (.dd2vtt) export for Foundry VTT (Universal Battlemap
-// Importer / dd-import). Generates a top-down map PNG + wall/door/light data.
-//
-// UVTT line_of_sight format (Universal Battlemap Importer 6.x expects this):
-//   Array of ARRAYS, where each inner array is a wall segment made of points.
-//   A single wall segment = [{x,y}, {x,y}] (start + end).
-//   So: [ [p1,p2], [p3,p4] ] = two segments: p1→p2 and p3→p4.
-//   A flat array of {x,y} objects will crash dd-import GetWalls().
+// uvtt.ts — Top-down map rendering + PNG export for the dungeon generator.
+// Renders the dungeon grid as a 2D top-down image (floor + walls + props)
+// and exports it as a PNG file.
 
 import {
   Dungeon, FLOOR, WALL, VOID, Prop,
 } from './types';
 import { roomFloorCells } from './generator';
 
-// ---- UVTT format types ----
-interface UVTTResolution {
-  map_origin: { x: number; y: number };
-  map_size: { rows: number; cols: number };
-  pixels_per_grid: number;
-}
-
-interface UVTTPortal {
-  position: { x: number; y: number };
-  bounds: [{ x: number; y: number }, { x: number; y: number }];
-  closed: boolean;
-  freestanding: boolean;
-  direction?: number;
-}
-
-interface UVTTLight {
-  position: { x: number; y: number };
-  intensity: number;
-  color: string;
-  range: number;
-  shadows: boolean;
-}
-
-// Universal Battlemap Importer expects line_of_sight as an array of wall
-// segments, where each segment is itself an array of points [{x,y},{x,y}].
-interface UVTTFile {
-  format: number;
-  resolution: UVTTResolution;
-  line_of_sight: Array<Array<{ x: number; y: number }>>;
-  port: number;
-  portals: UVTTPortal[];
-  lights: UVTTLight[];
-  image: string;
-}
 
 const PIXELS_PER_GRID = 100;
 
-// Browser canvases have a maximum dimension (~16384px) and memory limit.
-// Foundry VTT's Universal Battlemap Importer also downscales large images,
-// which can fail with "Canvas encoding failed. Dimensions 0x0" if the source
-// image exceeds the browser's canvas allocation limit. We cap the longest
-// side of the exported image at 4096px (Foundry's recommended max) and derive
-// the pixels-per-grid from that.
-const MAX_IMAGE_DIM = 4096;
+// Browser canvases support up to ~16384px per side. We cap the longest side
+// at 8192px (well within limits, good quality) and derive pixels-per-grid.
+// Each cell is always an integer number of pixels so the image stays perfectly
+// grid-aligned. For a 128-wide grid: floor(8192/128) = 64px/cell → 8192×7936.
+// For small grids (≤81 cells) it stays at the full 100px/cell.
+const MAX_IMAGE_DIM = 8192;
 
-/**
- * Compute a safe pixels-per-grid value so that the exported canvas never
- * exceeds MAX_IMAGE_DIM on either side. For a 128×124 grid this yields
- * floor(4096/128) = 32px per cell → 4096×3968 image (≈16MP, well within
- * browser limits). For small grids (e.g. 30×30) it stays at 100px/cell.
- */
 export function computePPG(d: Dungeon): number {
   const maxDim = Math.max(d.W, d.H);
-  return Math.max(16, Math.min(PIXELS_PER_GRID, Math.floor(MAX_IMAGE_DIM / maxDim)));
+  return Math.max(32, Math.min(PIXELS_PER_GRID, Math.floor(MAX_IMAGE_DIM / maxDim)));
 }
 
 /**
@@ -637,161 +591,7 @@ export function renderTopDownMap(
 }
 
 /**
- * Extract wall segments for UVTT.
- * Universal Battlemap Importer expects line_of_sight as an array of wall
- * segments, where each segment is an array of points [{x,y},{x,y}].
- * Returns: [ [{x,y},{x,y}], [{x,y},{x,y}], ... ]
- */
-function extractWallSegments(d: Dungeon, ppg: number): Array<Array<{ x: number; y: number }>> {
-  const { W, H, grid } = d;
-  const walls: Array<Array<{ x: number; y: number }>> = [];
-
-  // For each WALL cell, emit a wall segment along every edge that borders a
-  // FLOOR cell. These are the perimeter walls. Doors live in the open passages
-  // (portal bounds) and are added separately — we do NOT punch gaps here.
-  for (let y = 0; y < H; y++) {
-    for (let x = 0; x < W; x++) {
-      const i = y * W + x;
-      if (grid[i] !== WALL) continue;
-
-      const px = x * ppg;
-      const py = y * ppg;
-
-      // Top edge: floor above
-      if (y > 0 && grid[(y - 1) * W + x] === FLOOR) {
-        walls.push([{ x: px, y: py }, { x: px + ppg, y: py }]);
-      }
-      // Bottom edge: floor below
-      if (y < H - 1 && grid[(y + 1) * W + x] === FLOOR) {
-        walls.push([{ x: px, y: py + ppg }, { x: px + ppg, y: py + ppg }]);
-      }
-      // Left edge: floor to the left
-      if (x > 0 && grid[y * W + (x - 1)] === FLOOR) {
-        walls.push([{ x: px, y: py }, { x: px, y: py + ppg }]);
-      }
-      // Right edge: floor to the right
-      if (x < W - 1 && grid[y * W + (x + 1)] === FLOOR) {
-        walls.push([{ x: px + ppg, y: py }, { x: px + ppg, y: py + ppg }]);
-      }
-    }
-  }
-
-  return walls;
-}
-
-/**
- * Extract portals (doors) from door props. Each door prop has a rotation that
- * tells us which way the corridor runs:
- *   rot ≈ 0  → door in an east-west wall (corridor runs north-south) → bounds horizontal
- *   rot ≈ π/2 → door in a north-south wall (corridor runs east-west) → bounds vertical
- * The `bounds` field (two endpoints) is REQUIRED by Universal Battlemap Importer.
- */
-function extractPortals(d: Dungeon, ppg: number): UVTTPortal[] {
-  const portals: UVTTPortal[] = [];
-  const doors = d.props.filter((p) => p.kind === 'door');
-  for (const door of doors) {
-    const cx = door.x * ppg + ppg / 2;
-    const cy = door.y * ppg + ppg / 2;
-    const r = ((door.rot % (Math.PI * 2)) + Math.PI * 2) % (Math.PI * 2);
-    const isHorizontal = r < Math.PI / 4 || r > (7 * Math.PI) / 4 || (r > (3 * Math.PI) / 4 && r < (5 * Math.PI) / 4);
-    const bounds: [{ x: number; y: number }, { x: number; y: number }] = isHorizontal
-      ? [{ x: door.x * ppg, y: cy }, { x: (door.x + 1) * ppg, y: cy }]
-      : [{ x: cx, y: door.y * ppg }, { x: cx, y: (door.y + 1) * ppg }];
-    portals.push({
-      position: { x: cx, y: cy },
-      bounds,
-      closed: true,
-      freestanding: false,
-    });
-  }
-  return portals;
-}
-
-/**
- * Extract light sources from torches, braziers, chandeliers, crystals.
- */
-function extractLights(d: Dungeon, ppg: number): UVTTLight[] {
-  const lights: UVTTLight[] = [];
-  const litTorchPropIds: number[] = (d as any).litTorchPropIds ?? [];
-  const litSet = new Set(litTorchPropIds);
-
-  for (let i = 0; i < d.props.length; i++) {
-    const p = d.props[i];
-    let intensity = 0;
-    let color = '#ffffff';
-    let range = 0;
-
-    if (p.kind === 'torch' && litSet.has(i)) {
-      intensity = 0.8; color = '#ff9a3a'; range = 15;
-    } else if (p.kind === 'brazier') {
-      intensity = 1.0; color = '#ff7a2a'; range = 20;
-    } else if (p.kind === 'crystal') {
-      intensity = 0.6; color = '#40d0ff'; range = 12;
-    } else if (p.kind === 'portal') {
-      intensity = 0.5; color = '#6a8cff'; range = 10;
-    } else if (p.kind === 'chandelier') {
-      intensity = 0.9; color = '#ffb060'; range = 18;
-    }
-
-    if (intensity > 0) {
-      lights.push({
-        position: { x: p.x * ppg + ppg / 2, y: p.y * ppg + ppg / 2 },
-        intensity, color, range, shadows: true,
-      });
-    }
-  }
-
-  const boss = d.rooms[d.bossId];
-  lights.push({
-    position: { x: boss.cx * ppg + ppg / 2, y: boss.cy * ppg + ppg / 2 },
-    intensity: 1.2, color: '#ff3a2a', range: 25, shadows: true,
-  });
-
-  return lights;
-}
-
-/**
- * Generate a UVTT (.dd2vtt) file and trigger download.
- * No markers, includes props, for Foundry import.
- */
-export function downloadUVTT(d: Dungeon) {
-  const ppg = computePPG(d);
-
-  // Render map WITHOUT markers (Foundry doesn't need them)
-  const canvas = renderTopDownMap(d, ppg, false, true);
-  const dataUrl = canvas.toDataURL('image/png');
-  const base64Image = dataUrl.split(',')[1] ?? '';
-
-  const los = extractWallSegments(d, ppg);
-  const portals = extractPortals(d, ppg);
-  const lights = extractLights(d, ppg);
-
-  const uvtt: UVTTFile = {
-    format: 0.3,
-    resolution: {
-      map_origin: { x: 0, y: 0 },
-      map_size: { rows: d.H, cols: d.W },
-      pixels_per_grid: ppg,
-    },
-    line_of_sight: los,
-    port: 1,
-    portals,
-    lights,
-    image: base64Image,
-  };
-
-  const json = JSON.stringify(uvtt);
-  const blob = new Blob([json], { type: 'application/json' });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = `dungeon-${d.params.seed}-${d.params.theme}.dd2vtt`;
-  a.click();
-  URL.revokeObjectURL(url);
-}
-
-/**
- * Export top-down PNG with markers (for display).
+ * Export top-down PNG with markers (room labels: Вход, Босс, Сокровище).
  */
 export function downloadTopDownPNG(d: Dungeon) {
   const ppg = computePPG(d);
@@ -804,7 +604,7 @@ export function downloadTopDownPNG(d: Dungeon) {
 }
 
 /**
- * Export top-down PNG WITHOUT markers and WITH props (for Foundry manual import).
+ * Export top-down PNG WITHOUT markers — clean battlemap (floor + walls + decor).
  */
 export function downloadTopDownPNGClean(d: Dungeon) {
   const ppg = computePPG(d);
