@@ -337,3 +337,30 @@ Stage Summary:
 - 8 new features fully implemented and verified in browser
 - VLM assessment: 8/10 — all new controls visible
 - Clean lint, committed and pushed to GitHub
+
+---
+Task ID: feature-editor
+Agent: main
+Task: Implement level editor (manual room placement on top of generation)
+
+Work Log:
+- Created editor.ts module: EditTool type (13 tools), EditorState, EditAction, cloneDungeonForEdit, editGrid, stampRoom, addProp, recomputeWalls, undoAction, redoAction, pushHistory, saveEditedDungeon, listEditedDungeons, deleteEditedDungeon
+- 13 tools: floor, wall, erase, select, room_rect, room_ellipse, room_octagon, torch, chest, pillar, crystal, trap, teleport
+- Brush size slider (1-5) for grid painting tools
+- Room size slider (3-15) for room stamping tools
+- Undo/redo with 100-action history stack (EditAction stores old+new values for grid edits, prop data for prop operations)
+- Automatic wall recomputation after each grid edit (clears walls → recomputes 8-neighbor floor detection)
+- Save edited dungeons to localStorage with custom names
+- Edit mode toggle: switches canvas click behavior from room-picking to tile/prop editing
+- Uses raw raycaster for non-floor cells (pickRoom only works on floor)
+- Editor UI panel with tool grid (4 columns), color-coded tool buttons, brush/room size sliders, undo/redo buttons, save input
+- activeDungeon pattern: editedDungeon ?? dungeon — editor works on a mutable copy, original generation is preserved
+- Error boundary added to page.tsx for better debugging of client-side errors
+- Fixed bug: sed replacement accidentally changed DifficultyMeter's prop references from `dungeon` to `activeDungeon`
+- All 6/6 acceptance tests pass. Pushed to GitHub.
+
+Stage Summary:
+- Level editor fully implemented and verified in browser (9/10 VLM)
+- 13 editing tools, undo/redo, save to localStorage
+- All 6 acceptance tests pass, lint clean
+- Committed and pushed to GitHub
