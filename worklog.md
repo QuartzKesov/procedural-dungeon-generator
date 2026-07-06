@@ -187,3 +187,25 @@ Stage Summary:
 - New features: minimap viewport indicator (crosshair + clamped rectangle, tracks camera pan/zoom), water/lava pools (animated translucent surfaces, water for low-difficulty, lava for forge/high-difficulty), 3 new prop types (stalagmites, bones, barrels)
 - Clean lint, dev server stable on port 3000
 - Next round: could add room hover preview tooltip, saved layouts gallery, more prop variety, day/night transitions, water reflection effects
+
+---
+Task ID: cron-review-5
+Agent: main (webDevReview cron)
+Task: Periodic QA + add new features (room hover tooltip, animated stat counters, new prop variety, water reflection, styling polish)
+
+Work Log:
+- QA baseline: 6/6 tests pass, 7.2ms perf, lint clean, dev server stable
+- Enhancement: room hover tooltip — hover over any room in the 3D view to see a lightweight floating tooltip (follows cursor) showing: room type, id, shape, depth, difficulty %, mini difficulty bar, and "click to inspect" hint. Uses the existing pickRoom raycaster on mousemove (when not dragging). Dispatched via window custom event 'dungeon-room-hover'. Tooltip auto-hides when hovering empty space or the selected room. Verified: tooltip shows "combat #23, shape lshape, depth 4, diff 46%".
+- Enhancement: animated stat counters — useCountUp hook + AnimatedStat component. Numbers animate from old→new value with ease-out cubic over 600ms when stats change (e.g., dice roll, slider change). Applied to Rooms, Edges, Loops, Critical, Max Depth, Floor, Wall, Props, Spawns. Uses tabular-nums for stable digit width. Verified: stats change from 42/52/11 to 42/55/14 after dice roll.
+- Enhancement: 2 new prop types — crates (BoxGeometry, combat rooms, 30% chance, 1-3 cluster, scaled), statues (tall BoxGeometry with emissive glow, elite/large combat rooms, 15% chance, placed near walls, 4 rotation variants). Added to types PropKind, generator decorate(), scene geometry/materials/instanced meshes. Verified: crates 15-17, statues 2 per dungeon across all themes.
+- Enhancement: water reflection effect — water pools now have subtle vertical bob (surface tension), color shimmer (blue channel modulated for reflective look), plus existing opacity ripple. Lava pools keep fast churn. Verified: water meshes animate position.y + color.
+- Styling: AnimatedStat uses tabular-nums + transition-colors. RoomHoverTooltip uses animate-in fade-in, glassmorphism (bg-black/90 backdrop-blur), color-coded type dot, gradient difficulty bar.
+- All acceptance tests pass for seeds {1,7,42,1337,99999,123456} and all 6 themes. 60-room gen 10.2ms.
+
+Stage Summary:
+- ALL 6 acceptance tests pass across all tested seeds, room counts, and all 6 themes
+- 60-room generation: 10.2ms (best of 3), well under 50ms budget
+- New features: room hover tooltip (cursor-following preview card), animated stat counters (count-up on change), 2 new prop types (crates, statues), water reflection effect (bob + color shimmer)
+- VLM assessment: 8/10 — hover tooltip confirmed visible
+- Clean lint, dev server stable on port 3000
+- Next round: could add saved layouts gallery, more prop variety, day/night transitions, water reflection shader, room hover highlight ring

@@ -68,6 +68,8 @@ export function DungeonViewer() {
   const [presetName, setPresetName] = useState('');
   const [showPresets, setShowPresets] = useState(false);
   const [selectedRoom, setSelectedRoom] = useState<number>(-1);
+  const [hoveredRoom, setHoveredRoom] = useState<number>(-1);
+  const [hoveredScreen, setHoveredScreen] = useState<{ x: number; y: number } | null>(null);
   const [dayMode, setDayMode] = useState(false);
   const [seedHistory, setSeedHistory] = useState<number[]>([]);
 
@@ -135,6 +137,17 @@ export function DungeonViewer() {
     return () => window.removeEventListener('dungeon-room-pick', onPick);
   }, []);
 
+  // ---- listen for room hover events (for tooltip) ----
+  useEffect(() => {
+    const onHover = (e: Event) => {
+      const { roomId, sx, sy } = (e as CustomEvent<{ roomId: number; sx: number; sy: number }>).detail;
+      setHoveredRoom(roomId);
+      setHoveredScreen(roomId >= 0 ? { x: sx, y: sy } : null);
+    };
+    window.addEventListener('dungeon-room-hover', onHover);
+    return () => window.removeEventListener('dungeon-room-hover', onHover);
+  }, []);
+
   // ---- init Three.js once ----
   useEffect(() => {
     const container = containerRef.current!;
@@ -157,8 +170,11 @@ export function DungeonViewer() {
     threeRef.current = state;
     // room pick callback (set by React state setter below)
     (state as any).onRoomPicked = (roomId: number) => {
-      // dispatched to React state via a custom event (closures can't capture setState)
       window.dispatchEvent(new CustomEvent('dungeon-room-pick', { detail: roomId }));
+    };
+    // room hover callback (for tooltip)
+    (state as any).onRoomHovered = (roomId: number, sx: number, sy: number) => {
+      window.dispatchEvent(new CustomEvent('dungeon-room-hover', { detail: { roomId, sx, sy } }));
     };
 
     // mutable ref to the latest dungeon (closures read this)
@@ -255,19 +271,30 @@ export function DungeonViewer() {
       }
     };
     const onMove = (e: PointerEvent) => {
-      if (!dragging) return;
-      const dx = e.clientX - lastX, dy = e.clientY - lastY;
-      if (Math.abs(e.clientX - downX) > 5 || Math.abs(e.clientY - downY) > 5) moved = true;
-      lastX = e.clientX; lastY = e.clientY;
-      // pan in world units: screen delta → world delta via ortho frustum.
-      // Direction follows the camera yaw so panning feels natural after rotation.
-      const worldPerPx = (camera.top - camera.bottom) / container.clientHeight;
-      const yaw = THREE.MathUtils.degToRad((state as any).cameraYaw ?? 45);
-      const cosY = Math.cos(yaw), sinY = Math.sin(yaw);
-      // screen-x → world (cos, sin); screen-y → (-sin, cos) (perpendicular, tilted by iso)
-      state.pan.x -= (dx * cosY - dy * cosY) * worldPerPx;
-      state.pan.y -= (dx * sinY + dy * sinY) * worldPerPx;
-      applyCamera();
+      if (dragging) {
+        const dx = e.clientX - lastX, dy = e.clientY - lastY;
+        if (Math.abs(e.clientX - downX) > 5 || Math.abs(e.clientY - downY) > 5) moved = true;
+        lastX = e.clientX; lastY = e.clientY;
+        // pan in world units: screen delta → world delta via ortho frustum.
+        // Direction follows the camera yaw so panning feels natural after rotation.
+        const worldPerPx = (camera.top - camera.bottom) / container.clientHeight;
+        const yaw = THREE.MathUtils.degToRad((state as any).cameraYaw ?? 45);
+        const cosY = Math.cos(yaw), sinY = Math.sin(yaw);
+        // screen-x → world (cos, sin); screen-y → (-sin, cos) (perpendicular, tilted by iso)
+        state.pan.x -= (dx * cosY - dy * cosY) * worldPerPx;
+        state.pan.y -= (dx * sinY + dy * sinY) * worldPerPx;
+        applyCamera();
+      } else {
+        // hover detection — raycast to find which room is under the cursor
+        const ds = threeRef.current?.dungeonScene;
+        if (!ds) return;
+        const rect = renderer.domElement.getBoundingClientRect();
+        const ndcX = ((e.clientX - rect.left) / rect.width) * 2 - 1;
+        const ndcY = -((e.clientY - rect.top) / rect.height) * 2 + 1;
+        const hit = ds.pickRoom(ndcX, ndcY, camera);
+        const roomId = (hit && hit.roomId >= 0) ? hit.roomId : -1;
+        (threeRef.current as any)?.onRoomHovered?.(roomId, e.clientX, e.clientY);
+      }
     };
     const applyCamera = () => {
       const yaw = THREE.MathUtils.degToRad((state as any).cameraYaw ?? 45);
@@ -911,15 +938,15 @@ export function DungeonViewer() {
               <PanelTitle icon={<Zap className="h-4 w-4 text-amber-500" />} title="Stats" />
               <div className="grid grid-cols-2 gap-x-3 gap-y-1.5 font-mono text-xs">
                 <Stat k="Grid" v={`${dungeon.W}×${dungeon.H}`} />
-                <Stat k="Rooms" v={`${stats.rooms}`} />
-                <Stat k="Edges" v={`${stats.edges}`} />
-                <Stat k="Loops" v={`${stats.loops}`} highlight />
-                <Stat k="Critical" v={`${stats.criticalLength} hops`} />
-                <Stat k="Max Depth" v={`${stats.maxDepth}`} />
-                <Stat k="Floor" v={`${stats.floorTiles}`} />
-                <Stat k="Wall" v={`${stats.wallTiles}`} />
-                <Stat k="Props" v={`${stats.props}`} />
-                <Stat k="Spawns" v={`${stats.spawns}`} />
+                <AnimatedStat k="Rooms" v={stats.rooms} />
+                <AnimatedStat k="Edges" v={stats.edges} />
+                <AnimatedStat k="Loops" v={stats.loops} highlight />
+                <AnimatedStat k="Critical" v={stats.criticalLength} suffix=" hops" />
+                <AnimatedStat k="Max Depth" v={stats.maxDepth} />
+                <AnimatedStat k="Floor" v={stats.floorTiles} />
+                <AnimatedStat k="Wall" v={stats.wallTiles} />
+                <AnimatedStat k="Props" v={stats.props} />
+                <AnimatedStat k="Spawns" v={stats.spawns} />
                 <Stat k="Lights" v={`${stats.lights}/12`} />
                 <Stat k="Gen" v={`${stats.genMs.toFixed(1)}ms`} highlight />
               </div>
@@ -1038,6 +1065,15 @@ export function DungeonViewer() {
         />
       )}
 
+      {/* Room hover tooltip — lightweight preview following the cursor */}
+      {hoveredRoom >= 0 && hoveredRoom !== selectedRoom && hoveredRoom < dungeon.rooms.length && hoveredScreen && (
+        <RoomHoverTooltip
+          room={dungeon.rooms[hoveredRoom]}
+          x={hoveredScreen.x}
+          y={hoveredScreen.y}
+        />
+      )}
+
       {/* Sticky footer */}
       <footer className="z-10 mt-auto border-t border-amber-900/30 bg-black/80 px-4 py-2 backdrop-blur-md">
         <div className="mx-auto flex max-w-7xl flex-wrap items-center justify-between gap-2 text-[11px] text-amber-200/50">
@@ -1099,6 +1135,39 @@ function Stat({ k, v, highlight }: { k: string; v: string; highlight?: boolean }
   );
 }
 
+// ---- Animated stat counter (count-up on change) ----
+function useCountUp(target: number, duration = 600): number {
+  const [val, setVal] = useState(target);
+  const fromRef = useRef(target);
+  const startRef = useRef(0);
+  useEffect(() => {
+    const from = fromRef.current;
+    if (from === target) return;
+    startRef.current = performance.now();
+    let raf = 0;
+    const tick = () => {
+      const t = Math.min(1, (performance.now() - startRef.current) / duration);
+      const e = 1 - Math.pow(1 - t, 3); // ease-out cubic
+      setVal(Math.round(from + (target - from) * e));
+      if (t < 1) raf = requestAnimationFrame(tick);
+      else fromRef.current = target;
+    };
+    raf = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(raf);
+  }, [target, duration]);
+  return val;
+}
+
+function AnimatedStat({ k, v, suffix = '', highlight }: { k: string; v: number; suffix?: string; highlight?: boolean }) {
+  const display = useCountUp(v);
+  return (
+    <div className="flex items-center justify-between">
+      <span className="text-amber-200/40">{k}</span>
+      <span className={`tabular-nums transition-colors ${highlight ? 'text-amber-300' : 'text-amber-100/80'}`}>{display}{suffix}</span>
+    </div>
+  );
+}
+
 function TestRow({ t }: { t: TestResult }) {
   return (
     <div className="flex items-start gap-2 rounded-md border border-amber-900/20 bg-amber-950/10 px-2 py-1.5 text-[11px]">
@@ -1135,6 +1204,40 @@ function TooltipButton({ active, onClick, icon, label }: {
         <TooltipContent side="bottom" className="border-amber-900/40 bg-black/90 text-amber-100">{label}</TooltipContent>
       </Tooltip>
     </TooltipProvider>
+  );
+}
+
+// ---- Room Hover Tooltip (lightweight preview following the cursor) ----
+function RoomHoverTooltip({ room, x, y }: { room: Dungeon['rooms'][number]; x: number; y: number }) {
+  const typeColor = ROOM_TYPE_COLOR[room.type] ?? '#9a8a78';
+  // clamp position so tooltip stays on screen
+  const tx = Math.min(x + 14, window.innerWidth - 180);
+  const ty = Math.min(y + 14, window.innerHeight - 90);
+  return (
+    <div
+      className="pointer-events-none fixed z-50 w-44 animate-in fade-in duration-150"
+      style={{ left: tx, top: ty }}
+    >
+      <div className="rounded-lg border border-amber-800/50 bg-black/90 p-2.5 shadow-xl backdrop-blur-md">
+        <div className="flex items-center gap-1.5">
+          <span className="inline-block h-2 w-2 rounded-full" style={{ background: typeColor }} />
+          <span className="text-[11px] font-serif capitalize text-amber-100">{room.type}</span>
+          <span className="ml-auto font-mono text-[9px] text-amber-300/40">#{room.id}</span>
+        </div>
+        <div className="mt-1.5 space-y-0.5 font-mono text-[9px] text-amber-200/60">
+          <div className="flex justify-between"><span>shape</span><span className="text-amber-100/70">{room.shape}</span></div>
+          <div className="flex justify-between"><span>depth</span><span className="text-amber-100/70">{room.depth}</span></div>
+          <div className="flex justify-between"><span>diff</span><span style={{ color: typeColor }}>{(room.difficulty * 100).toFixed(0)}%</span></div>
+        </div>
+        <div className="mt-1.5 h-1 overflow-hidden rounded-full bg-black/50">
+          <div className="h-full rounded-full" style={{
+            width: `${room.difficulty * 100}%`,
+            background: `linear-gradient(90deg, #22c55e, #eab308, #ef4444)`,
+          }} />
+        </div>
+        <div className="mt-1.5 text-center text-[8px] text-amber-300/30">click to inspect</div>
+      </div>
+    </div>
   );
 }
 

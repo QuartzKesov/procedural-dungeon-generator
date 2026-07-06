@@ -710,6 +710,46 @@ function decorate(rng: RNG, dungeon: Dungeon & {
     }
   }
 
+  // ---- Crates (stackable storage in combat rooms, sometimes clustered) ----
+  for (const rm of rooms) {
+    if (rm.type !== 'combat') continue;
+    if (rng.chance(0.3)) {
+      const avail = roomCells[rm.id].filter((c) => !blocked[c.y * W + c.x]);
+      const count = rng.int(1, 3); // small cluster
+      for (let k = 0; k < Math.min(count, avail.length); k++) {
+        const c = avail[rng.int(0, avail.length - 1)];
+        if (blocked[c.y * W + c.x]) continue;
+        props.push({ kind: 'crate', x: c.x, y: c.y, rot: rng.range(0, Math.PI * 2) * 0.1, scale: rng.range(0.8, 1.1), roomId: rm.id, flickerPhase: 0 });
+        blocked[c.y * W + c.x] = 1;
+      }
+    }
+  }
+
+  // ---- Statues (shrine-adjacent or elite rooms, decorative monuments) ----
+  for (const rm of rooms) {
+    if (rm.type !== 'elite' && rm.type !== 'combat') continue;
+    if (rm.w * rm.h < 30) continue; // only large rooms
+    if (rng.chance(0.15)) {
+      const avail = roomCells[rm.id].filter((c) => !blocked[c.y * W + c.x]);
+      if (avail.length > 0) {
+        // place near a wall (edge of room)
+        const edgeCells = avail.filter((c) => {
+          // cell is on room edge if any 4-neighbor is not room floor
+          for (const [dx, dy] of [[1,0],[-1,0],[0,1],[0,-1]]) {
+            const nx = c.x + dx, ny = c.y + dy;
+            if (nx < 0 || ny < 0 || nx >= W || ny >= H) continue;
+            if (roomOwner[ny * W + nx] - 1 !== rm.id) return true;
+          }
+          return false;
+        });
+        const pool = edgeCells.length > 0 ? edgeCells : avail;
+        const c = pool[rng.int(0, pool.length - 1)];
+        props.push({ kind: 'statue', x: c.x, y: c.y, rot: rng.pick([0, Math.PI / 2, Math.PI, -Math.PI / 2]), scale: 1, roomId: rm.id, flickerPhase: 0 });
+        blocked[c.y * W + c.x] = 1;
+      }
+    }
+  }
+
   // ---- Braziers ringing the boss arena ----
   const boss = rooms[bossId];
   {

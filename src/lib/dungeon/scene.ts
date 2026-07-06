@@ -136,6 +136,17 @@ function barrelGeo(): THREE.BufferGeometry {
   g.translate(0, 0.35, 0);
   return g;
 }
+function crateGeo(): THREE.BufferGeometry {
+  const g = new THREE.BoxGeometry(0.6, 0.6, 0.6);
+  g.translate(0, 0.3, 0);
+  return g;
+}
+function statueGeo(): THREE.BufferGeometry {
+  // a simple statue: base + body + head
+  const g = new THREE.BoxGeometry(0.4, 1.6, 0.4);
+  g.translate(0, 0.8, 0);
+  return g;
+}
 
 // ---- The scene handle ----------------------------------------------------
 export interface DungeonScene {
@@ -193,6 +204,8 @@ export function buildDungeonScene(d: Dungeon, opts: BuildOptions): DungeonScene 
   const stalagmites = d.props.filter((p) => p.kind === 'stalagmite');
   const bones = d.props.filter((p) => p.kind === 'bones');
   const barrels = d.props.filter((p) => p.kind === 'barrel');
+  const crates = d.props.filter((p) => p.kind === 'crate');
+  const statues = d.props.filter((p) => p.kind === 'statue');
   const litTorchPropIds: number[] = (d as any).litTorchPropIds ?? [];
   const litTorchSet = new Set(litTorchPropIds);
   const litTorchPropObjects = litTorchPropIds.map((pi) => d.props[pi]).filter(Boolean);
@@ -211,6 +224,8 @@ export function buildDungeonScene(d: Dungeon, opts: BuildOptions): DungeonScene 
   const stalagmiteMat = new THREE.MeshLambertMaterial({ color: 0x5a4a3a });
   const bonesMat = new THREE.MeshLambertMaterial({ color: 0xc8c0a8, emissive: 0x2a2418 });
   const barrelMat = new THREE.MeshLambertMaterial({ color: 0x6a4a2a });
+  const crateMat = new THREE.MeshLambertMaterial({ color: 0x7a5a3a });
+  const statueMat = new THREE.MeshLambertMaterial({ color: 0x8a8a90, emissive: 0x1a1a20 });
   const spawnMats = [
     new THREE.MeshBasicMaterial({ color: 0x88ff88, transparent: true, opacity: 0.7 }), // tier 0
     new THREE.MeshBasicMaterial({ color: 0xffcc44, transparent: true, opacity: 0.75 }), // tier 1
@@ -461,6 +476,23 @@ export function buildDungeonScene(d: Dungeon, opts: BuildOptions): DungeonScene 
     rotY: p.rot,
   }));
   if (barrelMesh) group.add(barrelMesh);
+
+  // crates (stackable storage)
+  const crateMesh = buildPropInstanced(crates, crateGeo(), crateMat, (p) => ({
+    pos: new THREE.Vector3(worldX(p.x), 0, worldZ(p.y)),
+    scale: new THREE.Vector3(p.scale, p.scale, p.scale),
+    rotY: p.rot,
+  }));
+  if (crateMesh) group.add(crateMesh);
+
+  // statues (decorative monuments, with faint emissive glow)
+  const statueMesh = buildPropInstanced(statues, statueGeo(), statueMat, (p) => ({
+    pos: new THREE.Vector3(worldX(p.x), 0, worldZ(p.y)),
+    scale: new THREE.Vector3(1, 1, 1),
+    rotY: p.rot,
+    color: new THREE.Color(0x9a9aa0),
+  }));
+  if (statueMesh) group.add(statueMesh);
 
   // spawn markers (grouped by tier)
   const spawnGroups: THREE.InstancedMesh[] = [];
@@ -836,7 +868,7 @@ export function buildDungeonScene(d: Dungeon, opts: BuildOptions): DungeonScene 
       }
   }
   // store prop base scales for pop animation
-  const propMeshes: THREE.InstancedMesh[] = [pillarMesh, debrisMesh, chestMesh, brazierMesh, bracketMesh, flameMesh, crystalMesh, portalMesh, stalagmiteMesh, bonesMesh, barrelMesh, ...spawnGroups].filter(Boolean) as THREE.InstancedMesh[];
+  const propMeshes: THREE.InstancedMesh[] = [pillarMesh, debrisMesh, chestMesh, brazierMesh, bracketMesh, flameMesh, crystalMesh, portalMesh, stalagmiteMesh, bonesMesh, barrelMesh, crateMesh, statueMesh, ...spawnGroups].filter(Boolean) as THREE.InstancedMesh[];
 
   // store glow base opacity for build-animation ramp
   const glowBaseOpacity = glowMeshes.map((m) => (m.material as THREE.MeshBasicMaterial).opacity);
@@ -999,7 +1031,7 @@ export function buildDungeonScene(d: Dungeon, opts: BuildOptions): DungeonScene 
       (highlightRing.material as THREE.MeshBasicMaterial).opacity = pulse * ramp;
       highlightRing.rotation.z = elapsedSec * 0.5;
     }
-    // water/lava pool shimmer — gentle opacity + position ripple
+    // water/lava pool shimmer — gentle opacity + position ripple + hue shift
     for (let wi2 = 0; wi2 < waterMeshes.length; wi2++) {
       const wm = waterMeshes[wi2];
       const base = wm.userData.baseOpacity as number;
@@ -1008,6 +1040,13 @@ export function buildDungeonScene(d: Dungeon, opts: BuildOptions): DungeonScene 
         ? 0.7 + 0.3 * Math.sin(elapsedSec * 2 + wi2) // lava churns faster
         : 0.85 + 0.15 * Math.sin(elapsedSec * 0.8 + wi2 * 1.3); // water gentle
       (wm.material as THREE.MeshBasicMaterial).opacity = base * ripple * ramp;
+      // subtle vertical bob to simulate surface tension
+      wm.position.y = 0.03 + 0.01 * Math.sin(elapsedSec * 1.5 + wi2 * 2);
+      // water gets a subtle color shimmer (reflective look); lava stays red
+      if (!isLava) {
+        const shimmer = 0.9 + 0.1 * Math.sin(elapsedSec * 1.2 + wi2);
+        (wm.material as THREE.MeshBasicMaterial).color.setRGB(0.16 * shimmer, 0.35 * shimmer, 0.55 * shimmer);
+      }
     }
   }
 
